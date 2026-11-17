@@ -31,10 +31,10 @@ struct TonePadView: View {
             let size = geometry.size
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(BrandUI.black.opacity(0.35))
+                    .fill(.quaternary.opacity(0.5))
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(
-                        isFocused ? BrandUI.gold.opacity(0.6) : BrandUI.hairline,
+                        isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
                         lineWidth: 1
                     )
                 // the axes through the middle, faint: where "as said" is.
@@ -44,12 +44,12 @@ struct TonePadView: View {
                     path.move(to: CGPoint(x: Self.inset, y: size.height / 2))
                     path.addLine(to: CGPoint(x: size.width - Self.inset, y: size.height / 2))
                 }
-                .stroke(BrandUI.hairline, lineWidth: 1)
+                .stroke(.quaternary, lineWidth: 1)
 
                 ForEach(TonePosition.steps, id: \.self) { formality in
                     ForEach(TonePosition.steps, id: \.self) { length in
                         Circle()
-                            .fill(BrandUI.goldPale.opacity(0.28))
+                            .fill(.secondary.opacity(0.35))
                             .frame(width: 4, height: 4)
                             .position(
                                 point(
@@ -61,9 +61,9 @@ struct TonePadView: View {
                 }
 
                 Circle()
-                    .fill(BrandUI.gold)
-                    .overlay(Circle().strokeBorder(BrandUI.goldPale, lineWidth: 1.5))
-                    .shadow(color: BrandUI.gold.opacity(0.55), radius: 6)
+                    .fill(.tint)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.25), radius: 4)
                     .frame(width: Self.knob, height: Self.knob)
                     .position(point(for: tone, in: size))
                     .animation(.snappy(duration: 0.18), value: tone)
@@ -99,8 +99,8 @@ struct TonePadView: View {
 
     private func axisLabel(_ text: String) -> some View {
         Text(text)
-            .font(BrandUI.bodyFont.weight(.medium))
-            .foregroundStyle(BrandUI.textSecondary)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
             .accessibilityHidden(true)
     }
 

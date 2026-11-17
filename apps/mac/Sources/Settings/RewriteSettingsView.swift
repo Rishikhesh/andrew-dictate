@@ -16,7 +16,6 @@ struct RewriteSettingsView: View {
     @State private var modelDraft = ""
     @State private var editing: RewriteStyle?
     @State private var pendingRemoval: RewriteStyle?
-    @State private var hoveredStyleID: String?
 
     /// the right-hand column every row's control sits in, so the picker,
     /// the key field and the model line up down the tab.
@@ -31,47 +30,55 @@ struct RewriteSettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 13) {
-                BrandSectionHeader("provider")
+        Form {
+            Section("Provider") {
                 providerRow
                 if settings.provider.needsModelChoice {
-                    divider
                     modelRow
                 }
+            }
 
-                // the sections are told apart by space and a header; the
-                // hairline is for rows inside one.
-                BrandSectionHeader("rewrite")
-                    .padding(.top, 8)
+            Section("Rewrite") {
                 SettingsToggleRow(
                     "rewrite with \(gesture)",
                     explanation: "hold \(gesture), talk, let go, and an ai rewrites it before it lands. plain \(dictationKey.displayName) never leaves this mac.",
                     isOn: $settings.isEnabled
                 )
-                divider
                 keyRow
-                divider
-                stylesSection
+            }
 
-                BrandSectionHeader("summaries")
-                    .padding(.top, 8)
+            Section {
+                ForEach(Array(settings.pickerStyles.enumerated()), id: \.element.id) { index, style in
+                    styleRow(style, key: index + 1)
+                }
+                asSaidRow
+            } header: {
+                HStack {
+                    Text("Styles")
+                    Spacer()
+                    Button("New Style…") {
+                        editing = .custom(name: "")
+                    }
+                    .disabled(!settings.canAddStyle)
+                }
+            } footer: {
+                Text("Every take gets the default. Move the pointer while you talk and the pill offers them all, each on its number key.")
+            }
+
+            Section {
                 SettingsToggleRow(
                     "summarize meetings when they end",
                     explanation: summariesExplanation,
                     isOn: $settings.summariesEnabled
                 )
-                divider
                 templateRow
-
-                divider
-                    .padding(.top, 6)
+            } header: {
+                Text("Summaries")
+            } footer: {
                 privacyFootnote
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
-            .padding(.bottom, 20)
         }
+        .formStyle(.grouped)
         .onAppear {
             accounts.refresh()
             modelDraft = settings.model(for: settings.provider)
@@ -95,38 +102,36 @@ struct RewriteSettingsView: View {
             )
         }
         .alert(
-            "remove \(pendingRemoval?.name ?? "this style")?",
+            "Remove \(pendingRemoval?.name ?? "this style")?",
             isPresented: Binding(
                 get: { pendingRemoval != nil },
                 set: { if !$0 { pendingRemoval = nil } }
             )
         ) {
-            Button("remove", role: .destructive) {
+            Button("Remove", role: .destructive) {
                 if let pendingRemoval {
                     settings.remove(pendingRemoval)
                 }
                 pendingRemoval = nil
             }
-            Button("cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         }
     }
 
-    private var divider: some View {
-        Rectangle()
-            .fill(BrandUI.hairline)
-            .frame(height: 1)
-            .accessibilityHidden(true)
-    }
-
+    /// a button in a settings row: bordered when it does the thing,
+    /// borderless when it is the quieter way out (sign out, cancel).
+    @ViewBuilder
     private func textButton(
         _ title: String,
         quiet: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.plain)
-            .font(BrandUI.bodyFont)
-            .foregroundStyle(quiet ? BrandUI.textSecondary : BrandUI.gold)
+        if quiet {
+            Button(title.capitalizedFirst, action: action)
+                .buttonStyle(.borderless)
+        } else {
+            Button(title.capitalizedFirst, action: action)
+        }
     }
 
     // MARK: - the key
@@ -144,10 +149,10 @@ struct RewriteSettingsView: View {
             )
             Spacer(minLength: 8)
             HStack(spacing: 6) {
-                KeyChip(dictationKey.displayName)
+                SettingsKeyCap(dictationKey.displayName)
                 Text("+")
-                    .font(BrandUI.valueFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .monospaced()
+                    .foregroundStyle(.secondary)
                 Menu {
                     ForEach(RewriteModifier.allCases) { option in
                         Button {
@@ -156,17 +161,17 @@ struct RewriteSettingsView: View {
                             if option == modifier {
                                 Label(option.displayName, systemImage: "checkmark")
                             } else {
-                                Text(option.displayName)
+                                Text(option.displayName.capitalizedFirst)
                             }
                         }
                         .disabled(!option.isFree(alongside: dictationKey))
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        KeyChip(modifier.displayName)
+                        SettingsKeyCap(modifier.displayName)
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(BrandUI.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .menuStyle(.button)
@@ -189,11 +194,11 @@ struct RewriteSettingsView: View {
                 Spacer(minLength: 8)
                 Picker("", selection: $settings.provider) {
                     ForEach(RewriteProvider.allCases) { provider in
-                        Text(provider.displayName).tag(provider)
+                        Text(provider.displayName.capitalizedFirst).tag(provider)
                     }
                 }
                 .labelsHidden()
-                .brandMenuStyle()
+                
                 .frame(width: Self.controlWidth)
                 .accessibilityLabel("who answers")
             }
@@ -210,16 +215,16 @@ struct RewriteSettingsView: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(BrandUI.gold)
+                    .foregroundStyle(.tint)
                     .accessibilityHidden(true)
-                Text(readyLine(provider, detail: detail))
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text(readyLine(provider, detail: detail).capitalizedFirst)
+                    
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if provider.authentication != .none {
                     Text("·")
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                     textButton(provider.authentication == .apiKey ? "remove key" : "sign out") {
                         accounts.signOut(provider)
@@ -230,35 +235,34 @@ struct RewriteSettingsView: View {
         case let .working(message):
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
-                Text(message)
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text(message.capitalizedFirst)
+                    
+                    .foregroundStyle(.secondary)
                 Text("·")
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                textButton("cancel") { accounts.cancelSignIn() }
+                textButton("Cancel") { accounts.cancelSignIn() }
             }
         case let .unavailable(reason):
-            Text(reason)
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.attention)
+            Text(reason.capitalizedFirst)
+                
+                .foregroundStyle(.red)
         case let .needsSetup(problem):
             VStack(alignment: .trailing, spacing: 8) {
                 if let problem {
-                    Text(problem)
-                        .font(BrandUI.bodyFont)
-                        .foregroundStyle(BrandUI.attention)
+                    Text(problem.capitalizedFirst)
+                        
+                        .foregroundStyle(.red)
                         .multilineTextAlignment(.trailing)
                 }
                 if provider.canSignIn {
-                    Button("sign in with \(provider.signInName)…") {
+                    Button("Sign In with \(provider.signInName)…") {
                         Task {
                             await accounts.signIn(provider)
                             loadModels()
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(BrandUI.goldDeep)
                     .frame(width: Self.controlWidth, alignment: .trailing)
                 }
                 if provider.acceptsKey {
@@ -275,7 +279,7 @@ struct RewriteSettingsView: View {
                     .frame(width: Self.controlWidth)
                 }
                 if let keyPage = provider.keyPage {
-                    textButton("get a key ↗", quiet: true) {
+                    textButton("Get a Key ↗", quiet: true) {
                         NSWorkspace.shared.open(keyPage)
                     }
                 }
@@ -310,7 +314,7 @@ struct RewriteSettingsView: View {
             Spacer(minLength: 8)
             TextField(settings.provider.defaultModel, text: $modelDraft)
                 .textFieldStyle(.roundedBorder)
-                .font(BrandUI.valueFont)
+                .monospaced()
                 .frame(width: Self.controlWidth)
                 .onSubmit {
                     settings.setModel(modelDraft, for: settings.provider)
@@ -327,7 +331,7 @@ struct RewriteSettingsView: View {
                         } label: {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(BrandUI.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .frame(width: 22, height: 18)
                                 .contentShape(Rectangle())
                         }
@@ -354,113 +358,80 @@ struct RewriteSettingsView: View {
 
     // MARK: - styles
 
-    private var stylesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 16) {
-                SettingsRowLabel(
-                    "styles",
-                    explanation: "every take gets the default. move the pointer while you talk and the pill offers them all, each on its number key."
-                )
-                Spacer(minLength: 8)
-                textButton("new style…") {
-                    editing = .custom(name: "")
-                }
-                .disabled(!settings.canAddStyle)
-            }
-
-            VStack(spacing: 0) {
-                ForEach(Array(settings.pickerStyles.enumerated()), id: \.element.id) { index, style in
-                    styleRow(style, key: index + 1)
-                    divider.padding(.leading, 52)
-                }
-                asSaidRow
-            }
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(BrandUI.cardBg)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(BrandUI.hairline, lineWidth: 1)
-            }
-        }
-    }
-
     private func styleRow(_ style: RewriteStyle, key: Int) -> some View {
         let isDefault = style.id == settings.defaultStyleID
-        let isHovered = hoveredStyleID == style.id
         return HStack(spacing: 12) {
-            KeyChip("\(key)")
+            SettingsKeyCap("\(key)")
                 .frame(width: 26)
                 .accessibilityLabel("key \(key)")
             VStack(alignment: .leading, spacing: 2) {
-                Text(style.name)
-                    .font(BrandUI.bodyFont.weight(.medium))
-                    .foregroundStyle(BrandUI.textPrimary)
-                Text(summary(of: style))
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                HStack(spacing: 6) {
+                    Text(style.name.capitalizedFirst)
+                    if isDefault {
+                        Text("Default")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tint)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(.tint.opacity(0.15)))
+                    }
+                }
+                Text(summary(of: style).capitalizedFirst)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             Spacer(minLength: 12)
-            HStack(spacing: 14) {
-                if !style.isBuiltIn {
-                    textButton("edit", quiet: true) { editing = style }
-                    textButton("remove", quiet: true) { pendingRemoval = style }
-                }
-                if isDefault {
-                    defaultBadge
-                } else {
-                    // on the row under the pointer only: a column of
-                    // "make default" would shout over the names.
-                    textButton("make default") {
-                        settings.defaultStyleID = style.id
-                    }
-                    .opacity(isHovered ? 1 : 0)
-                }
+            // every action in sight: the menu, and the same on right-click.
+            Menu {
+                styleActions(style, isDefault: isDefault)
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Actions for \(style.name)")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
         .contentShape(Rectangle())
-        .onHover { over in
-            if over {
-                hoveredStyleID = style.id
-            } else if hoveredStyleID == style.id {
-                hoveredStyleID = nil
-            }
+        .contextMenu {
+            styleActions(style, isDefault: isDefault)
+        }
+    }
+
+    @ViewBuilder
+    private func styleActions(_ style: RewriteStyle, isDefault: Bool) -> some View {
+        Button("Make Default") {
+            settings.defaultStyleID = style.id
+        }
+        .disabled(isDefault)
+        if !style.isBuiltIn {
+            Button("Edit…") { editing = style }
+            Divider()
+            Button("Remove…", role: .destructive) { pendingRemoval = style }
         }
     }
 
     /// the last button on the pill: no model at all.
     private var asSaidRow: some View {
         HStack(spacing: 12) {
-            KeyChip("\(RewritePick.asSaidKey)")
+            SettingsKeyCap("\(RewritePick.asSaidKey)")
                 .frame(width: 26)
                 .accessibilityLabel("key \(RewritePick.asSaidKey)")
             VStack(alignment: .leading, spacing: 2) {
-                Text("as said")
-                    .font(BrandUI.bodyFont.weight(.medium))
-                    .foregroundStyle(BrandUI.textPrimary)
-                Text("on the picker only: pastes it the way you said it")
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text("As said")
+                    
+                    
+                Text("On the picker only: pastes it the way you said it.")
+                    
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 12)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-
-    private var defaultBadge: some View {
-        Text("default")
-            .font(BrandUI.sectionLabelFont)
-            .foregroundStyle(BrandUI.windowBg)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(BrandUI.gold))
     }
 
     private func summary(of style: RewriteStyle) -> String {
@@ -501,12 +472,12 @@ struct RewriteSettingsView: View {
             Spacer(minLength: 8)
             Picker("", selection: templateBinding) {
                 ForEach(MeetingTemplate.builtIn) { template in
-                    Label(template.name, systemImage: template.symbol)
+                    Label(template.name.capitalizedFirst, systemImage: template.symbol)
                         .tag(template.id)
                 }
             }
             .labelsHidden()
-            .brandMenuStyle()
+            
             .frame(width: Self.controlWidth)
             .accessibilityLabel("template")
         }
@@ -518,11 +489,11 @@ struct RewriteSettingsView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: "lock")
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            Text(privacyLine)
+            Text(privacyLine.capitalizedFirst)
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -555,46 +526,46 @@ struct RewriteStyleEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(style.name.isEmpty ? "new style" : style.name)
-                .font(BrandUI.titleFont)
+            Text(style.name.isEmpty ? "New Style" : style.name)
+                .font(.title2.weight(.semibold))
 
-            TextField("name, as the pill shows it", text: $style.name)
+            TextField("Name, as the pill shows it", text: $style.name)
                 .textFieldStyle(.roundedBorder)
 
             HStack(alignment: .top, spacing: 18) {
                 TonePadView(tone: toneBinding)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("presets")
-                        .font(BrandUI.bodyFont.weight(.medium))
+                    Text("Presets")
+                        
                     ForEach(TonePreset.all) { preset in
                         Button(preset.name) {
                             style.tone = preset.tone
                             style.notes = preset.notes
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(
+                        .buttonStyle(.borderless)
+                        .fontWeight(
                             style.tone == preset.tone && style.notes == preset.notes
-                                ? BrandUI.goldPale
-                                : BrandUI.gold
+                                ? .semibold
+                                : .regular
                         )
                     }
-                    Button("reset") {
+                    Button("Reset") {
                         style.tone = .center
                         style.notes = ""
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .foregroundStyle(.secondary)
                     .padding(.top, 4)
                     Text((style.tone ?? .center).summary)
-                        .font(BrandUI.valueFont)
-                        .foregroundStyle(BrandUI.goldPale)
+                        .monospaced()
+                        .foregroundStyle(.primary)
                         .padding(.top, 6)
                 }
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("anything else")
-                    .font(BrandUI.bodyFont.weight(.medium))
+                Text("Anything else")
+                    
                 TextField("e.g. no emoji · end with a question · write it as a commit message", text: $style.notes, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...3)
@@ -602,15 +573,15 @@ struct RewriteStyleEditor: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("try it")
-                        .font(BrandUI.bodyFont.weight(.medium))
+                    Text("Try it")
+                        
                     Spacer()
                     if isTrying {
                         ProgressView().controlSize(.mini)
                     }
                     Button(tried == nil ? "try" : "try again", action: tryIt)
                         .buttonStyle(.plain)
-                        .foregroundStyle(BrandUI.gold)
+                        .foregroundStyle(.tint)
                         .disabled(isTrying)
                 }
                 TextField("something you might say", text: $sample, axis: .vertical)
@@ -618,26 +589,26 @@ struct RewriteStyleEditor: View {
                     .lineLimit(2...4)
                 if let tried {
                     Text(tried)
-                        .font(BrandUI.bodyFont)
-                        .foregroundStyle(BrandUI.goldPale)
+                        
+                        .foregroundStyle(.primary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let tryFailure {
                     Text(tryFailure)
-                        .font(BrandUI.bodyFont)
-                        .foregroundStyle(BrandUI.attention)
+                        
+                        .foregroundStyle(.red)
                 }
             }
 
             HStack {
                 Spacer()
-                Button("cancel") {
+                Button("Cancel") {
                     tryTask?.cancel()
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
-                Button("save") {
+                Button("Save") {
                     tryTask?.cancel()
                     var saved = style
                     saved.name = saved.name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -649,9 +620,8 @@ struct RewriteStyleEditor: View {
         }
         .padding(22)
         .frame(width: 520)
-        .brandTinted()
-        .preferredColorScheme(.dark)
-        .onDisappear { tryTask?.cancel() }
+        .tint(SystemAccent.color)
+                .onDisappear { tryTask?.cancel() }
     }
 
     private var toneBinding: Binding<TonePosition> {

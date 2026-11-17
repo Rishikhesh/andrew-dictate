@@ -46,3 +46,28 @@ struct SettingsToggleRow: View {
         .toggleStyle(.switch)
     }
 }
+
+/// a key's name drawn the way macOS draws one in its own settings: a small
+/// rounded cap in the system's colours, not the brand's.
+struct SettingsKeyCap: View {
+    private let key: String
+    private let isActive: Bool
+
+    init(_ key: String, isActive: Bool = false) {
+        self.key = key
+        self.isActive = isActive
+    }
+
+    var body: some View {
+        Text(key)
+            .font(.callout.weight(.medium))
+            .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .frame(minWidth: 22)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+            )
+    }
+}

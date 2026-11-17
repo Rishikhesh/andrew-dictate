@@ -57,4 +57,15 @@ final class SentenceCaseTests: XCTestCase {
         XCTAssertEqual("right ⌥".capitalizedFirst, "Right ⌥")
         XCTAssertEqual("".capitalizedFirst, "")
     }
+
+    func testProperNamesKeepTheirCapitals() {
+        XCTAssertEqual(
+            "apple intelligence, on this mac. free and private.".capitalizedFirst,
+            "Apple Intelligence, on this Mac. Free and private."
+        )
+        XCTAssertEqual("sign in and your chatgpt plan pays.".capitalizedFirst, "Sign in and your ChatGPT plan pays.")
+        XCTAssertEqual("an ai rewrites it".capitalizedFirst, "An AI rewrites it")
+        XCTAssertEqual("a key from platform.openai.com".capitalizedFirst, "A key from platform.openai.com")
+        XCTAssertEqual("the machine said maybe".capitalizedFirst, "The machine said maybe")
+    }
 }
