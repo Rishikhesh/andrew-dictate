@@ -21,6 +21,12 @@ packages:
     # setup fetches its tokenizer by repo name (MeetingEngines): moving the
     # pin means checking it is still the repo WhisperKit asks for.
     exactVersion: 1.1.0
+  LibrariesDev:
+    url: https://github.com/Jakubantalik/Libraries.dev
+    # the listening orb (ThinkingOrbsKit, MIT). pinned to a commit, not the
+    # branch the repo tells you to track: its semver tags predate the root
+    # manifest, and a branch resolves something new every morning.
+    revision: 371b324a253b8ee71b9ce1bc8a1ecc5a59e1a16a
 
 targets:
   AndrewDictate:
@@ -50,6 +56,8 @@ targets:
     dependencies:
       - package: FluidAudio
       - package: WhisperKit
+      - package: LibrariesDev
+        product: ThinkingOrbsKit
     settings:
       base:
         PRODUCT_NAME: Andrew Dictate

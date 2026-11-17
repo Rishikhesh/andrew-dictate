@@ -422,6 +422,9 @@ final class DictationCoordinator: ObservableObject {
             state: .prewarming,
             audioRecorder: nil
         )
+        viewModel.orbStyle = { [settings] in
+            (settings.listeningOrb, settings.orbBackground)
+        }
         hudViewModel = viewModel
 
         let monitor = HotkeyMonitor(settings: settings)

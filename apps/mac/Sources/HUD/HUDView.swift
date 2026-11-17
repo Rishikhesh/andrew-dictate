@@ -188,6 +188,11 @@ final class HUDViewModel: ObservableObject {
     @Published private(set) var meetingLightChangedAt = Date()
     /// the colour it was last lit in, so a problem goes out in red.
     @Published private(set) var meetingPalette: LampPalette = .gold
+    /// which orb listens, and whether on its chip: read each time the
+    /// stage draws, so a change in settings shows on the next take.
+    var orbStyle: () -> (orb: ListeningOrb, background: Bool) = {
+        (.defaultOrb, true)
+    }
 
     private var audioRecorder: AudioRecorder?
     private var levelSamplingTask: Task<Void, Never>?
@@ -469,18 +474,18 @@ struct HUDView: View {
                     case .idle:
                         EmptyView()
                     case .prewarming:
-                        lampLine(phase: .ember)
+                        orbChip(phase: .waiting)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel("Warming up")
                     case .recording where !viewModel.isHearing:
-                        // pressed, not yet heard: the ember until the
-                        // mic's first audio, so a lit lamp means it is
+                        // pressed, not yet heard: slow and dim until the
+                        // mic's first audio, so a lively orb means it is
                         // hearing you.
-                        lampLine(phase: .ember)
+                        orbChip(phase: .waiting)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel("Waiting for the microphone")
                     case .recording:
-                        lampLine(phase: .burn)
+                        orbChip(phase: .hearing)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(
                                 viewModel.isRecordingLocked
@@ -488,7 +493,7 @@ struct HUDView: View {
                                     : "Listening"
                             )
                     case .transcribing:
-                        lampLine(phase: .cool)
+                        orbChip(phase: .transcribing)
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel("Transcribing")
                     }
@@ -506,19 +511,16 @@ struct HUDView: View {
         .environment(\.appearsActive, true)
     }
 
-    private func lampLine(phase: GoldRippleLine.Phase) -> some View {
-        LampLine(
+    /// dictation's light: the orb chosen in settings, one for the take.
+    private func orbChip(phase: OrbPhase) -> some View {
+        let style = viewModel.orbStyle()
+        return OrbChip(
+            orb: style.orb,
             phase: phase,
             loudness: viewModel.loudness,
-            startedAt: viewModel.waveTransitionStartedAt,
-            isLocked: viewModel.isRecordingLocked,
-            ground: LampGround.shipped,
+            background: style.background,
             glassID: Self.glassID,
             glassNamespace: glassNamespace
-        )
-        .frame(
-            width: HUDLayoutEngine.waveSize.width,
-            height: HUDLayoutEngine.waveSize.height
         )
     }
 
