@@ -39,12 +39,30 @@ struct OrbMotion: Equatable, Sendable {
     // after `WaveLevelShaper`), so the ranges are wide: between words the
     // orb draws in, dims and slows; a loud syllable swells it, brightens it
     // and speeds it up, and the chip breathes with it.
-    static func speed(_ phase: OrbPhase, loudness: Float) -> Double {
+    static func speed(_ phase: OrbPhase, loudness: Float, tone: Double = 0) -> Double {
         switch phase {
         case .waiting: 0.6
-        case .hearing: 0.5 + 2.5 * clamped(loudness)
+        case .hearing: (0.5 + 2.5 * clamped(loudness)) * (1 + 0.35 * clampedTone(tone))
         case .transcribing: 1.0
         }
+    }
+
+    /// how far the orb rises with a higher tone (falls with a lower), as a
+    /// fraction of its size.
+    static func lift(_ phase: OrbPhase, tone: Double, reduceMotion: Bool) -> Double {
+        guard phase == .hearing, !reduceMotion else {
+            return 0
+        }
+        return 0.08 * clampedTone(tone)
+    }
+
+    /// higher: taller and narrower. lower: wider and flatter.
+    static func stretch(_ phase: OrbPhase, tone: Double, reduceMotion: Bool) -> (x: Double, y: Double) {
+        guard phase == .hearing, !reduceMotion else {
+            return (1, 1)
+        }
+        let t = clampedTone(tone)
+        return (1 - 0.08 * t, 1 + 0.12 * t)
     }
 
     static func scale(_ phase: OrbPhase, loudness: Float, reduceMotion: Bool) -> Double {
@@ -80,9 +98,16 @@ struct OrbMotion: Equatable, Sendable {
         time * presetSpeed
     }
 
-    mutating func advance(by dt: Double, phase: OrbPhase, loudness: Float) {
+    mutating func advance(by dt: Double, phase: OrbPhase, loudness: Float, tone: Double = 0) {
         let step = min(max(dt.isFinite ? dt : 0, 0), Self.maximumStep)
-        time += step * Self.speed(phase, loudness: loudness)
+        time += step * Self.speed(phase, loudness: loudness, tone: tone)
+    }
+
+    private static func clampedTone(_ tone: Double) -> Double {
+        guard tone.isFinite else {
+            return 0
+        }
+        return min(max(tone, -1), 1)
     }
 
     /// bad mic data never reaches the orb: NaN is silence, and loudness

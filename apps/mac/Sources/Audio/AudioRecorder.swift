@@ -78,6 +78,11 @@ final class AudioRecorder: DisposableMicCapture {
         capture.levelStorage.currentLevel
     }
 
+    /// the voice's pitch in Hz, nil between words.
+    var currentPitch: Double? {
+        capture.levelStorage.currentPitch
+    }
+
     /// the device the engine's input is actually bound to, which is not
     /// necessarily the system default — the gap the press log exists to
     /// show. read on the capture's queue when it starts; this is the copy.
@@ -953,9 +958,18 @@ private final class AudioLevelStorage: @unchecked Sendable {
     private static let maximumDecibels: Float = -12
 
     private let level = OSAllocatedUnfairLock(initialState: Float.zero)
+    /// the voice's pitch in the latest loud enough buffer, nil when it was
+    /// not voiced: what the orb's tone follows.
+    private let pitch = OSAllocatedUnfairLock<Double?>(initialState: nil)
+    /// pitch is read only once the voice is plainly there.
+    private static let pitchGate: Float = 0.15
 
     var currentLevel: Float {
         level.withLock { $0 }
+    }
+
+    var currentPitch: Double? {
+        pitch.withLock { $0 }
     }
 
     func update(from buffer: AVAudioPCMBuffer) {
@@ -987,10 +1001,27 @@ private final class AudioLevelStorage: @unchecked Sendable {
             1
         )
         level.withLock { $0 = normalized }
+
+        let reading: Double?
+        if normalized >= Self.pitchGate {
+            let frames = Int(buffer.frameLength)
+            var mono = [Float](repeating: 0, count: frames)
+            for i in 0..<frames {
+                mono[i] = channel[i * channelMultiplier]
+            }
+            reading = PitchEstimator.fundamental(
+                of: mono,
+                sampleRate: buffer.format.sampleRate
+            )
+        } else {
+            reading = nil
+        }
+        pitch.withLock { $0 = reading }
     }
 
     func reset() {
         level.withLock { $0 = 0 }
+        pitch.withLock { $0 = nil }
     }
 }
 

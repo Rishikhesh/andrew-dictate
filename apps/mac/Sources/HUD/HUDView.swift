@@ -172,6 +172,11 @@ final class HUDViewModel: ObservableObject {
     /// shaped + thermally smoothed loudness: fast attack, slow release —
     /// a filament can't cool instantly.
     @Published private(set) var loudness: Float = 0
+    /// your tone against your own usual voice, -1…1: what lifts and
+    /// stretches the orb. the tracker's baseline outlives a take, so the
+    /// orb knows your voice from the start of the next one.
+    @Published private(set) var tone: Double = 0
+    private var toneTracker = ToneTracker()
     @Published private(set) var waveTransitionStartedAt = Date()
     /// hands-free capture looks exactly like a held key unless the lamp
     /// says otherwise. the coordinator owns the fact; the line wears it.
@@ -380,6 +385,7 @@ final class HUDViewModel: ObservableObject {
 
             if state != .transcribing {
                 loudness = 0
+                tone = 0
             }
             return
         }
@@ -420,6 +426,9 @@ final class HUDViewModel: ObservableObject {
         let release = 1 - exp(-interval / 0.200)
         let gain = shaped > loudness ? attack : release
         loudness += (shaped - loudness) * Float(gain)
+
+        toneTracker.update(pitch: audioRecorder?.currentPitch, dt: interval)
+        tone = toneTracker.tone
     }
 }
 
@@ -513,6 +522,7 @@ struct HUDView: View {
             orb: style.orb,
             phase: phase,
             loudness: viewModel.loudness,
+            tone: viewModel.tone,
             background: style.background,
             size: style.size,
             glassID: Self.glassID,

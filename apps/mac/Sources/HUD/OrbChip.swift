@@ -9,6 +9,7 @@ struct OrbChip: View {
     let orb: ListeningOrb
     let phase: OrbPhase
     let loudness: Float
+    let tone: Double
     let background: Bool
     let size: OrbSizeChoice
     let glassID: String
@@ -25,7 +26,7 @@ struct OrbChip: View {
                 .onChange(of: timeline.date) { _, now in
                     let dt = lastTick.map { now.timeIntervalSince($0) } ?? 0
                     lastTick = now
-                    motion.advance(by: dt, phase: phase, loudness: loudness)
+                    motion.advance(by: dt, phase: phase, loudness: loudness, tone: tone)
                 }
         }
         .frame(width: chipSide, height: chipSide)
@@ -49,6 +50,12 @@ struct OrbChip: View {
         )
         // reduce motion: the orb's own still frame, so no clock of ours.
         .orbFrozenTime(reduceMotion ? nil : motion.engineTime(presetSpeed: presetSpeed))
+        // tone: higher rises and stands taller, lower settles and widens.
+        .scaleEffect(
+            x: OrbMotion.stretch(phase, tone: tone, reduceMotion: reduceMotion).x,
+            y: OrbMotion.stretch(phase, tone: tone, reduceMotion: reduceMotion).y
+        )
+        .offset(y: -size.orb * OrbMotion.lift(phase, tone: tone, reduceMotion: reduceMotion))
         .opacity(OrbMotion.opacity(phase, loudness: loudness))
         .shadow(color: .black.opacity(background ? 0 : 0.45), radius: 6)
     }
