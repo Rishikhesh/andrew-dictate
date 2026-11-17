@@ -70,6 +70,16 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// how big the orb is drawn. a size this build does not know is large.
+    @Published var orbSize: OrbSizeChoice {
+        didSet {
+            guard orbSize != oldValue else {
+                return
+            }
+            userDefaults.set(orbSize.rawValue, forKey: Self.orbSizeKey)
+        }
+    }
+
     /// the dark glass chip behind the orb; off, the orb floats on its own.
     @Published var orbBackground: Bool {
         didSet {
@@ -323,6 +333,7 @@ final class AppSettings: ObservableObject {
         "AndrewDictate.soundFeedbackEnabled"
     private static let listeningOrbKey = "AndrewDictate.listeningOrb"
     private static let orbBackgroundKey = "AndrewDictate.orbBackground"
+    private static let orbSizeKey = "AndrewDictate.orbSize"
     private static let keepDictationsKey = "AndrewDictate.keepDictations"
     /// the key from when dictation only had parakeet to pick from, kept so
     /// the pick survives the update.
@@ -454,12 +465,11 @@ final class AppSettings: ObservableObject {
         listeningOrb = userDefaults
             .string(forKey: Self.listeningOrbKey)
             .flatMap(ListeningOrb.init(rawValue:)) ?? .defaultOrb
-        // unset means on: the chip keeps the light dots readable anywhere.
-        orbBackground = userDefaults.object(
-            forKey: Self.orbBackgroundKey
-        ) == nil
-            ? true
-            : userDefaults.bool(forKey: Self.orbBackgroundKey)
+        // unset means off: the orb floats on its own until you ask for a chip.
+        orbBackground = userDefaults.bool(forKey: Self.orbBackgroundKey)
+        orbSize = userDefaults
+            .string(forKey: Self.orbSizeKey)
+            .flatMap(OrbSizeChoice.init(rawValue:)) ?? .defaultSize
         // unset means on: this ships enabled, unlike pre-roll.
         keepDictations = userDefaults.object(
             forKey: Self.keepDictationsKey

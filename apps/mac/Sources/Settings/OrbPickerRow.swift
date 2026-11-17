@@ -24,6 +24,19 @@ struct OrbPickerRow: View {
                 }
             }
 
+            HStack {
+                SettingsRowLabel("size", explanation: "how big the orb is drawn while you talk.")
+                Spacer(minLength: 8)
+                Picker("size", selection: $settings.orbSize) {
+                    ForEach(OrbSizeChoice.allCases) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+
             SettingsToggleRow(
                 "background",
                 explanation: "a small dark chip behind the orb, so it reads over any window.",

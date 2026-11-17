@@ -92,4 +92,11 @@ final class OrbMotionTests: XCTestCase {
         motion.advance(by: 0.05, phase: .transcribing, loudness: 0)
         XCTAssertEqual(motion.engineTime(presetSpeed: 2.34), 0.05 * 2.34, accuracy: 1e-9)
     }
+
+    func testSizeChoicesMatchTheApprovedRenders() {
+        XCTAssertEqual(OrbSizeChoice.small.orb, 36); XCTAssertEqual(OrbSizeChoice.small.chip, 44)
+        XCTAssertEqual(OrbSizeChoice.medium.orb, 54); XCTAssertEqual(OrbSizeChoice.medium.chip, 64)
+        XCTAssertEqual(OrbSizeChoice.large.orb, 70); XCTAssertEqual(OrbSizeChoice.large.chip, 80)
+        XCTAssertEqual(OrbSizeChoice.defaultSize, .large)
+    }
 }

@@ -17,20 +17,29 @@ final class ListeningOrbSettingTests: XCTestCase {
         userDefaults.removePersistentDomain(forName: suiteName)
     }
 
-    func testDefaultsAreComposingWithBackground() {
+    func testDefaultsAreComposingLargeWithoutBackground() {
         let settings = AppSettings(userDefaults: userDefaults)
         XCTAssertEqual(settings.listeningOrb, .composing)
-        XCTAssertTrue(settings.orbBackground)
+        XCTAssertFalse(settings.orbBackground)
+        XCTAssertEqual(settings.orbSize, .large)
+    }
+
+    func testSizeSurvivesReloadAndUnknownIsLarge() {
+        let settings = AppSettings(userDefaults: userDefaults)
+        settings.orbSize = .small
+        XCTAssertEqual(AppSettings(userDefaults: userDefaults).orbSize, .small)
+        userDefaults.set("huge", forKey: "AndrewDictate.orbSize")
+        XCTAssertEqual(AppSettings(userDefaults: userDefaults).orbSize, .large)
     }
 
     func testChoiceSurvivesReload() {
         let settings = AppSettings(userDefaults: userDefaults)
         settings.listeningOrb = .searching
-        settings.orbBackground = false
+        settings.orbBackground = true
 
         let reloaded = AppSettings(userDefaults: userDefaults)
         XCTAssertEqual(reloaded.listeningOrb, .searching)
-        XCTAssertFalse(reloaded.orbBackground)
+        XCTAssertTrue(reloaded.orbBackground)
     }
 
     func testUnknownStoredOrbFallsBackToComposing() {

@@ -190,8 +190,8 @@ final class HUDViewModel: ObservableObject {
     @Published private(set) var meetingPalette: LampPalette = .gold
     /// which orb listens, and whether on its chip: read each time the
     /// stage draws, so a change in settings shows on the next take.
-    var orbStyle: () -> (orb: ListeningOrb, background: Bool) = {
-        (.defaultOrb, true)
+    var orbStyle: () -> (orb: ListeningOrb, background: Bool, size: OrbSizeChoice) = {
+        (.defaultOrb, false, .defaultSize)
     }
 
     private var audioRecorder: AudioRecorder?
@@ -514,6 +514,7 @@ struct HUDView: View {
             phase: phase,
             loudness: viewModel.loudness,
             background: style.background,
+            size: style.size,
             glassID: Self.glassID,
             glassNamespace: glassNamespace
         )

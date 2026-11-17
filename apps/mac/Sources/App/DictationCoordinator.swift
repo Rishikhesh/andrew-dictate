@@ -423,7 +423,7 @@ final class DictationCoordinator: ObservableObject {
             audioRecorder: nil
         )
         viewModel.orbStyle = { [settings] in
-            (settings.listeningOrb, settings.orbBackground)
+            (settings.listeningOrb, settings.orbBackground, settings.orbSize)
         }
         hudViewModel = viewModel
 

@@ -56,3 +56,12 @@ The gold lamp line that shows while you dictate felt dated. After eleven rounds 
 ## Left to the builder
 
 The exact chip and orb sizes (80 and 70 pt after a hands-on run; the stage is about 114 pt tall, so the chip at its loudest, about 94 pt, still fits), the speed and size constants, and the settings row layout (9 across or 5 + 4).
+
+## Revision 2 (after hands-on, 2026-11-17)
+
+- **Size setting.** `AppSettings.orbSize: OrbSizeChoice` (`.small` 36 pt orb / 44 pt chip, `.medium` 54 / 64, `.large` 70 / 80), stored as `AndrewDictate.orbSize`, default `.large`. The picker row shows it as a segmented control.
+- **No chip by default.** `orbBackground` now defaults to `false`.
+- **Pitch, not only loudness.**
+  - **Measuring.** The mic tap estimates the voice's fundamental pitch for each buffer: normalised autocorrelation over 70–450 Hz on a signal decimated to about 12 kHz, and only when the buffer is loud enough and the correlation peak is at least 0.6.
+  - **Tone.** A `ToneTracker` keeps a slow running baseline of your own pitch in octaves, and turns each estimate into a tone from -1 (half an octave below your usual) to +1 (half an octave above). With no voiced pitch, the tone eases back to 0.
+  - **What the orb does.** A higher tone lifts the orb by up to 8% of its size, stretches it taller (`y = 1 + 0.12 × tone`, `x = 1 − 0.08 × tone`) and speeds it up (`× (1 + 0.35 × tone)`). A lower tone does the opposite. Reduce Motion turns lift and stretch off.
