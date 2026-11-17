@@ -303,6 +303,8 @@ struct SettingsView: View {
                 settings: settings
             )
             rowDivider
+            OrbPickerRow(settings: settings)
+            rowDivider
             PipelineView(coordinator: coordinator, settings: settings)
             rowDivider
             engineEditor
