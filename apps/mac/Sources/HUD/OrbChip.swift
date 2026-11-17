@@ -13,8 +13,8 @@ struct OrbChip: View {
     let glassID: String
     let glassNamespace: Namespace.ID
 
-    static let chipSize: CGFloat = 44
-    static let orbSize: CGFloat = 36
+    static let chipSize: CGFloat = 80
+    static let orbSize: CGFloat = 70
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var motion = OrbMotion()

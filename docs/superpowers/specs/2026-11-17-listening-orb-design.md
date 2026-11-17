@@ -35,7 +35,7 @@ The gold lamp line that shows while you dictate felt dated. After eleven rounds 
 ## Design
 
 - **Dependency.** Add `https://github.com/Jakubantalik/Libraries.dev` to `apps/mac/project.yml`, pinned to commit `371b324a253b8ee71b9ce1bc8a1ecc5a59e1a16a` (`revision:`, not a branch), product `ThinkingOrbsKit`. This follows the file's rule of exact pins, so CI doesn't resolve something new each morning.
-- **The chip.** A new `HUD/OrbChip.swift` view: a circle about 44 pt across, made of Liquid Glass tinted dark (so the light dots read over any wallpaper), with a `ThinkingOrb(state:, theme: .dark, displaySize:)` inside it about 34 pt across. It joins the existing `GlassEffectContainer`, so it morphs with the text pills the way the lamp does now.
+- **The chip.** A new `HUD/OrbChip.swift` view: a circle about 80 pt across, made of Liquid Glass tinted dark (so the light dots read over any wallpaper), with a `ThinkingOrb(state:, theme: .dark, displaySize:)` inside it about 70 pt across. It joins the existing `GlassEffectContainer`, so it morphs with the text pills the way the lamp does now.
 - **Each state of the take**, mapped from the coordinator's existing states:
   - `prewarming`, and `recording` before the mic is heard: the orb at a slow speed (about 0.6×) and 60% opacity.
   - `recording`: speed `0.5 + 2.5 × loudness`, orb size `0.85 + 0.45 × loudness`, opacity `0.7 + 0.3 × loudness`, and the chip `1 + 0.18 × loudness`, all from the view model's existing smoothed `loudness`. (Revised after a hands-on run: the first numbers moved the orb only 6–10% at normal speech, which read as static.)
@@ -55,4 +55,4 @@ The gold lamp line that shows while you dictate felt dated. After eleven rounds 
 
 ## Left to the builder
 
-The exact chip and orb sizes (start at 44 and 34 pt, then tune by eye), the speed and size constants, and the settings row layout (9 across or 5 + 4).
+The exact chip and orb sizes (80 and 70 pt after a hands-on run; the stage is about 114 pt tall, so the chip at its loudest, about 94 pt, still fits), the speed and size constants, and the settings row layout (9 across or 5 + 4).
