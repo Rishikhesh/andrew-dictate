@@ -470,32 +470,17 @@ struct HUDView: View {
                 } else if viewModel.meetingLight != .off {
                     meetingLamp(viewModel.meetingLight)
                 } else {
-                    switch viewModel.state {
-                    case .idle:
-                        EmptyView()
-                    case .prewarming:
-                        orbChip(phase: .waiting)
+                    // one orb for the whole take: built once, outside any
+                    // per-state branch, so its clock never restarts. pressed
+                    // and not yet heard, it is slow and dim; a lively orb
+                    // means it is hearing you.
+                    if let phase = OrbPhase.forLamp(
+                        viewModel.state.lamp,
+                        isHearing: viewModel.isHearing
+                    ) {
+                        orbChip(phase: phase)
                             .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Warming up")
-                    case .recording where !viewModel.isHearing:
-                        // pressed, not yet heard: slow and dim until the
-                        // mic's first audio, so a lively orb means it is
-                        // hearing you.
-                        orbChip(phase: .waiting)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Waiting for the microphone")
-                    case .recording:
-                        orbChip(phase: .hearing)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(
-                                viewModel.isRecordingLocked
-                                    ? "Listening, locked"
-                                    : "Listening"
-                            )
-                    case .transcribing:
-                        orbChip(phase: .transcribing)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Transcribing")
+                            .accessibilityLabel(orbLabel)
                     }
                 }
             }
@@ -509,6 +494,16 @@ struct HUDView: View {
         // window is drawn dimmed and desaturated. this tells the glass it
         // is active anyway, which is what a lamp is.
         .environment(\.appearsActive, true)
+    }
+
+    private var orbLabel: String {
+        switch viewModel.state {
+        case .idle: ""
+        case .prewarming: "Warming up"
+        case .recording where !viewModel.isHearing: "Waiting for the microphone"
+        case .recording: viewModel.isRecordingLocked ? "Listening, locked" : "Listening"
+        case .transcribing: "Transcribing"
+        }
     }
 
     /// dictation's light: the orb chosen in settings, one for the take.

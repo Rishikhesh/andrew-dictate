@@ -35,13 +35,15 @@ struct OrbChip: View {
 
     private var orbView: some View {
         let scale = OrbMotion.scale(phase, loudness: loudness, reduceMotion: reduceMotion)
+        let state = OrbState(rawValue: orb.rawValue) ?? .composing
+        let presetSpeed = resolvePreset(state, .px64).speed
         return ThinkingOrb(
-            state: OrbState(rawValue: orb.rawValue) ?? .composing,
+            state: state,
             theme: .dark,
             displaySize: Double(Self.orbSize) * scale
         )
         // reduce motion: the orb's own still frame, so no clock of ours.
-        .orbFrozenTime(reduceMotion ? nil : motion.time)
+        .orbFrozenTime(reduceMotion ? nil : motion.engineTime(presetSpeed: presetSpeed))
         .opacity(OrbMotion.opacity(phase))
         .shadow(color: .black.opacity(background ? 0 : 0.45), radius: 6)
     }

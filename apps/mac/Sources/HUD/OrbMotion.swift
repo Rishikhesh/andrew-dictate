@@ -10,6 +10,20 @@ enum OrbPhase: Equatable, Sendable {
     case transcribing
 }
 
+extension OrbPhase {
+    /// the take's phase from the panel's view of it; nil when there is no
+    /// take. one rule, so the stage can keep one orb for the whole take
+    /// instead of a new one per state.
+    static func forLamp(_ lamp: HUDLampState, isHearing: Bool) -> OrbPhase? {
+        switch lamp {
+        case .idle: nil
+        case .prewarming: .waiting
+        case .recording: isHearing ? .hearing : .waiting
+        case .transcribing: .transcribing
+        }
+    }
+}
+
 /// the orb's own clock. one orb state for the whole take: the voice only
 /// changes how fast its time runs and how big it is drawn, never its shape.
 /// time accumulates (`t += dt × speed`) so a change of speed never makes the
@@ -38,6 +52,12 @@ struct OrbMotion: Equatable, Sendable {
 
     static func opacity(_ phase: OrbPhase) -> Double {
         phase == .waiting ? 0.6 : 1
+    }
+
+    /// the time to hand the orb: a frozen time is raw engine time, which
+    /// skips the orb's own tuned pace, so it is applied here.
+    func engineTime(presetSpeed: Double) -> Double {
+        time * presetSpeed
     }
 
     mutating func advance(by dt: Double, phase: OrbPhase, loudness: Float) {

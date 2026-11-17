@@ -56,4 +56,22 @@ final class OrbMotionTests: XCTestCase {
             XCTAssertFalse(orb.displayName.isEmpty, "\(orb) has no name")
         }
     }
+
+    // final review, finding 1: one orb across the whole take means one
+    // phase rule, outside the view's switch.
+    func testPhaseForEachLampState() {
+        XCTAssertNil(OrbPhase.forLamp(.idle, isHearing: false))
+        XCTAssertEqual(OrbPhase.forLamp(.prewarming, isHearing: false), .waiting)
+        XCTAssertEqual(OrbPhase.forLamp(.recording, isHearing: false), .waiting)
+        XCTAssertEqual(OrbPhase.forLamp(.recording, isHearing: true), .hearing)
+        XCTAssertEqual(OrbPhase.forLamp(.transcribing, isHearing: true), .transcribing)
+    }
+
+    // final review, finding 2: a frozen time is raw engine time, so the
+    // orb's own preset pace has to be applied by us.
+    func testEngineTimeAppliesThePresetSpeed() {
+        var motion = OrbMotion()
+        motion.advance(by: 0.05, phase: .transcribing, loudness: 0)
+        XCTAssertEqual(motion.engineTime(presetSpeed: 2.34), 0.05 * 2.34, accuracy: 1e-9)
+    }
 }
