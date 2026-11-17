@@ -146,12 +146,12 @@ struct SettingsView: View {
         }
         .alert(item: $pendingModelRemoval) { version in
             Alert(
-                title: Text(removalTitle(version)),
-                message: Text(removalMessage(version)),
-                primaryButton: .destructive(Text("remove download")) {
+                title: Text(removalTitle(version).capitalizedFirst),
+                message: Text(removalMessage(version).capitalizedFirst),
+                primaryButton: .destructive(Text("Remove Download")) {
                     removeDownload(version)
                 },
-                secondaryButton: .cancel(Text("cancel"))
+                secondaryButton: .cancel(Text("Cancel"))
             )
         }
         // the archive is the one thing here that does not come back: the file
@@ -172,7 +172,7 @@ struct SettingsView: View {
                     // reload() reverses to newest-first, so the last row is
                     // the oldest thing in the file.
                     oldest: browser.items.last?.startedAt
-                )
+                ).capitalizedFirst
             )
         }
     }
@@ -187,12 +187,6 @@ struct SettingsView: View {
         )
     }
 
-    private var rowDivider: some View {
-        Rectangle()
-            .fill(BrandUI.hairline)
-            .frame(height: 1)
-            .accessibilityHidden(true)
-    }
 
     // MARK: - dictation
 
@@ -235,7 +229,7 @@ struct SettingsView: View {
         case .history:
             historyTab
         case .general:
-            ScrollView { generalTab }
+            generalTab
         }
     }
 
@@ -701,138 +695,72 @@ struct SettingsView: View {
     // MARK: - general
 
     private var generalTab: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            SettingsToggleRow(
-                "launch at login",
-                explanation: "starts Andrew Dictate when you sign in.",
-                isOn: Binding(
+        Form {
+            Section {
+                Toggle(isOn: Binding(
                     get: { loginItem.isEnabled },
                     set: { loginItem.setEnabled($0) }
-                )
-            )
+                )) {
+                    Text("Open at login")
+                    if let message = loginItem.message {
+                        Text(message.capitalizedFirst)
+                    }
+                }
+                .toggleStyle(.switch)
 
-            if let message = loginItem.message {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
+                // the one request the app makes on its own (ADR 0043), so
+                // the row says exactly what goes out.
+                Toggle(isOn: $settings.checksForUpdates) {
+                    Text("Check for updates")
+                    Text("Once a day, sends the version you’re running to dictate.jass.gg and nothing else. A newer one shows up as a line in the menu.")
+                }
+                .toggleStyle(.switch)
             }
 
-            // the one request the app makes on its own (ADR 0043), so the
-            // row says exactly what goes out.
-            SettingsToggleRow(
-                "check for updates",
-                explanation: """
-                    once a day, sends the version you're running to \
-                    dictate.jass.gg and nothing else. a newer one shows up \
-                    as a line in the menu.
-                    """,
-                isOn: $settings.checksForUpdates
-            )
-
-            rowDivider
-
-            numbersDashboard
-
-            // leaving lives here, under its own name — it sat inside the
-            // history pane as "remove everything…" and nobody could find it.
-            if Capabilities.current.canUninstall {
-                rowDivider
-
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("leaving?")
-                            .font(BrandUI.bodyFont.weight(.medium))
-                        Text("removes what's on this mac, piece by piece.")
-                            .font(BrandUI.bodyFont)
-                            .foregroundStyle(BrandUI.textSecondary)
+            // the numbers themselves are on Home; the full report, for a
+            // bug report, stays here.
+            if Capabilities.current.canCopyTimings {
+                Section("Speed report") {
+                    LabeledContent {
+                        Button("Copy Report") { coordinator.copyTimings() }
+                    } label: {
+                        Text("Copy the full timing report")
+                        Text(sampleLine)
                     }
+                }
+            }
 
-                    Spacer(minLength: 8)
-
-                    Button("remove Andrew Dictate…") {
-                        showsRemoval = true
+            Section("About") {
+                LabeledContent("Version", value: appVersion)
+                // leaving lives here, under its own name.
+                if Capabilities.current.canUninstall {
+                    LabeledContent {
+                        Button("Remove…") { showsRemoval = true }
+                    } label: {
+                        Text("Remove Andrew Dictate")
+                        Text("Removes what’s on this Mac, piece by piece. You choose what to keep.")
                     }
                 }
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
-        .padding(.bottom, 20)
+        .formStyle(.grouped)
     }
 
-    /// the numbers, visible. "copy timings" used to be a button whose output
-    /// you could only see by pasting it somewhere; the claim it carries now
-    /// has a face, and the copy button ships the full report underneath it.
-    private var numbersDashboard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            BrandSectionHeader("the numbers")
-
-            HStack(alignment: .top, spacing: 36) {
-                statTile(
-                    "words typed",
-                    settings.totalWordsDictated.formatted(
-                        .number.grouping(.automatic)
-                    )
-                )
-                statTile(
-                    "typical paste",
-                    milliseconds(timings?.keyUpToCompletion?.p50)
-                )
-                statTile(
-                    "worst 1-in-20",
-                    milliseconds(timings?.keyUpToCompletion?.p95)
-                )
-            }
-
-            HStack(spacing: 10) {
-                Text(sampleLine)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-
-                Spacer(minLength: 8)
-
-                if Capabilities.current.canCopyTimings {
-                    Button("copy the full report") {
-                        coordinator.copyTimings()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.gold)
-                }
-            }
-        }
-    }
-
-    private func statTile(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value)
-                .font(BrandUI.machineFont(size: 22, bold: true))
-                .foregroundStyle(BrandUI.textPrimary)
-
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
-        }
-        .accessibilityElement(children: .combine)
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String
+        return build.map { "\(version) (\($0))" } ?? version
     }
 
     private var sampleLine: String {
         guard let timings, timings.sampleSize > 0 else {
-            return "no delivered pastes measured yet — dictate something."
+            return "No delivered pastes measured yet. Dictate something."
         }
         if timings.sampleSize == 1 {
-            return "measured over 1 delivered paste on this mac."
+            return "Measured over 1 delivered paste on this Mac."
         }
-        return """
-            measured over \(timings.sampleSize) delivered pastes on this mac.
-            """
-    }
-
-    private func milliseconds(_ duration: Duration?) -> String {
-        guard let duration else {
-            return "—"
-        }
-        return "\(Int(duration.inMilliseconds.rounded())) ms"
+        return "Measured over \(timings.sampleSize.formatted()) delivered pastes on this Mac."
     }
 
     private func refreshInstalledModels() {

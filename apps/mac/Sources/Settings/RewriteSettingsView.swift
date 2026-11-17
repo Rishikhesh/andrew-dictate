@@ -273,7 +273,7 @@ struct RewriteSettingsView: View {
                         )
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(saveKey)
-                        textButton("save", action: saveKey)
+                        textButton("Save", action: saveKey)
                             .disabled(pastedKey.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                     .frame(width: Self.controlWidth)

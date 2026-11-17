@@ -12,18 +12,17 @@ struct RemovalView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("remove what's on this mac")
-                .font(BrandUI.titleFont)
-                .foregroundStyle(BrandUI.textPrimary)
+            Text("Remove what’s on this Mac")
+                .font(.title2.weight(.semibold))
 
             if viewModel.hasAnythingToRemove {
-                Text("everything is ticked. untick anything you want to keep.")
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text("Everything is ticked. Untick anything you want to keep.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
             } else {
-                Text("there's nothing left to remove.")
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text("There’s nothing left to remove.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -38,21 +37,21 @@ struct RemovalView: View {
             }
             .padding(.vertical, 4)
 
-            Divider().overlay(BrandUI.hairline)
+            Divider()
 
             Toggle(
                 "also move Andrew Dictate to the trash",
                 isOn: $viewModel.alsoTrashTheApp
             )
-            .font(BrandUI.bodyFont)
+            .font(.body)
 
             // The one thing the app genuinely cannot do for you. Saying so
             // beats letting someone believe "no traces" covered it.
             VStack(alignment: .leading, spacing: 4) {
-                Text("macOS keeps the microphone and accessibility permissions.")
+                Text("macOS keeps the microphone and Accessibility permissions.")
                     .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-                Button("open privacy & security…") {
+                    .foregroundStyle(.secondary)
+                Button("Open Privacy & Security…") {
                     NSWorkspace.shared.open(
                         URL(
                             string: "x-apple.systempreferences:"
@@ -65,12 +64,12 @@ struct RemovalView: View {
             }
 
             if let outcome = viewModel.outcome {
-                Text(outcome)
-                    .font(BrandUI.bodyFont)
+                Text(outcome.capitalizedFirst)
+                    .font(.body)
                     .foregroundStyle(
                         outcome.hasPrefix("couldn")
-                            ? BrandUI.attention
-                            : BrandUI.gold
+                            ? AnyShapeStyle(.red)
+                            : AnyShapeStyle(.secondary)
                     )
             }
 
@@ -81,7 +80,7 @@ struct RemovalView: View {
                 ScrollView {
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -97,23 +96,21 @@ struct RemovalView: View {
                         : " "
                 )
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
 
                 Spacer()
 
-                Button("cancel") { dismiss() }
+                Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .disabled(isWorking)
 
-                Button("remove") { remove() }
+                Button("Remove") { remove() }
                     .buttonStyle(.glassProminent)
                     .disabled(viewModel.selection.isEmpty || isWorking)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(BrandUI.windowBg)
-        .preferredColorScheme(.dark)
         .onAppear { viewModel.reload() }
     }
 
@@ -165,17 +162,17 @@ private struct RemovalRow: View {
             .accessibilityLabel(entry.item.title)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.item.title)
-                    .font(BrandUI.bodyFont)
+                Text(entry.item.title.capitalizedFirst)
+                    .font(.body)
                     .foregroundStyle(
                         entry.exists
-                            ? BrandUI.textPrimary
-                            : BrandUI.textSecondary
+                            ? AnyShapeStyle(.primary)
+                            : AnyShapeStyle(.secondary)
                     )
                 if entry.exists, let caveat = entry.item.caveat {
-                    Text(caveat)
+                    Text(caveat.capitalizedFirst)
                         .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -183,7 +180,7 @@ private struct RemovalRow: View {
 
             Text(sizeText)
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
         }
     }
 }

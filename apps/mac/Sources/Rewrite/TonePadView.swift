@@ -14,15 +14,15 @@ struct TonePadView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            axisLabel("concise")
+            axisLabel("Concise")
             HStack(spacing: 6) {
-                axisLabel("casual")
+                axisLabel("Casual")
                     .frame(width: 58, alignment: .trailing)
                 pad
-                axisLabel("professional")
+                axisLabel("Professional")
                     .frame(width: 58, alignment: .leading)
             }
-            axisLabel("expanded")
+            axisLabel("Expanded")
         }
     }
 
