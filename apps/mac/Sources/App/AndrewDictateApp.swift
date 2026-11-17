@@ -113,6 +113,9 @@ struct AndrewDictateApp: App {
                 nsImage: MenuBarBrandIcon.image(for: coordinator.badgeLook)
             )
             .accessibilityLabel(menuBarLabel)
+            #if DEBUG
+            .background(OpenSettingsAtLaunch())
+            #endif
             .task {
                 lifecycleDelegate.onReopen = { [weak coordinator] in
                     coordinator?.handleReopen()
@@ -151,3 +154,41 @@ struct AndrewDictateApp: App {
         .windowResizability(.contentSize)
     }
 }
+
+#if DEBUG
+/// a development build can open straight onto settings, so a pane can be
+/// looked at without a click:
+/// `open -a "Andrew Dictate Dev" --args -OpenSettingsAtLaunch YES -SettingsSectionAtLaunch home`
+private struct OpenSettingsAtLaunch: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .task {
+                guard UserDefaults.standard.bool(forKey: "OpenSettingsAtLaunch") else {
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(600))
+                NSApp.activate()
+                openSettings()
+                // -SnapshotSettingsTo /path.png: the window draws itself into
+                // a file, which needs no screen recording permission.
+                guard let path = UserDefaults.standard.string(forKey: "SnapshotSettingsTo") else {
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(1_500))
+                let window = NSApp.windows
+                    .filter { $0.isVisible && $0.frame.width > 500 && $0.frame.height > 400 }
+                    .max { $0.frame.width < $1.frame.width }
+                guard let view = window?.contentView?.superview ?? window?.contentView,
+                      let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+                    return
+                }
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?
+                    .write(to: URL(fileURLWithPath: path))
+            }
+    }
+}
+#endif

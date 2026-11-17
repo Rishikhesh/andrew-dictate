@@ -2,28 +2,6 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum SettingsTab: String, CaseIterable, Identifiable {
-    case dictation
-    case ai
-    case meetings
-    case dictionary
-    case history
-    case general
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .dictation: "dictation"
-        case .ai: "ai"
-        case .dictionary: "dictionary"
-        case .history: "history"
-        case .meetings: "meetings"
-        case .general: "general"
-        }
-    }
-}
-
 /// history holds two different nouns — your own speech, and other people's
 /// words — and ADR 0022 keeps them apart on purpose. one switch, not two
 /// panes: it is the same question asked of two piles.
@@ -45,7 +23,7 @@ struct SettingsView: View {
 
     private let modelStore: ModelStore
 
-    @State private var selectedTab: SettingsTab = .dictation
+    @State private var selectedSection: SettingsSection = .home
     @State private var historySegment: HistorySegment = .dictations
     @State private var installedModels: [InstalledModel] = []
     @State private var pendingModelRemoval: SpeechModel?
@@ -84,6 +62,13 @@ struct SettingsView: View {
             )
         )
         _settings = ObservedObject(wrappedValue: settings)
+        #if DEBUG
+        // with -OpenSettingsAtLaunch, which section to land on.
+        if let raw = UserDefaults.standard.string(forKey: "SettingsSectionAtLaunch"),
+           let section = SettingsSection(rawValue: raw) {
+            _selectedSection = State(initialValue: section)
+        }
+        #endif
         _dictionaryStore = ObservedObject(
             wrappedValue: coordinator.dictionaryStore
         )
@@ -93,61 +78,19 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            Tab(
-                "dictation",
-                systemImage: "waveform",
-                value: SettingsTab.dictation
-            ) {
-                dictationTab
+        NavigationSplitView {
+            List(SettingsSection.allCases, selection: $selectedSection) { section in
+                SettingsSectionLabel(section: section)
+                    .badge(section == .home ? setupIssues.count : 0)
+                    .tag(section)
             }
-            Tab(
-                "ai",
-                systemImage: "sparkles",
-                value: SettingsTab.ai
-            ) {
-                RewriteSettingsView(
-                    settings: coordinator.rewriteSettings,
-                    accounts: coordinator.rewriteAccounts,
-                    dictationKey: settings.dictationHotkey
-                )
-            }
-            Tab(
-                "meetings",
-                systemImage: "person.2.wave.2",
-                value: SettingsTab.meetings
-            ) {
-                meetingsTab
-            }
-            Tab(
-                "dictionary",
-                systemImage: "character.book.closed",
-                value: SettingsTab.dictionary
-            ) {
-                dictionaryTab
-            }
-            Tab(
-                "history",
-                systemImage: "clock.arrow.circlepath",
-                value: SettingsTab.history
-            ) {
-                historyTab
-            }
-            Tab(
-                "general",
-                systemImage: "gearshape",
-                value: SettingsTab.general
-            ) {
-                generalTab
-            }
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
+        } detail: {
+            detail(for: selectedSection)
+                .navigationTitle(selectedSection.title)
         }
-        .frame(width: 800)
-        .brandGlassWindow()
-        .foregroundStyle(BrandUI.textPrimary)
-        .font(BrandUI.bodyFont)
-        .brandTinted()
-        .controlSize(.small)
-        .preferredColorScheme(.dark)
+        .tint(SystemAccent.color)
+        .frame(minWidth: 760, idealWidth: 860, minHeight: 520, idealHeight: 620)
         .onAppear {
             // an LSUIElement app opening its settings scene may not be the
             // active app, which would leave the window behind everything.
@@ -175,7 +118,7 @@ struct SettingsView: View {
                 meetings.reload()
             }
         }
-        .onChange(of: selectedTab) { _, tab in
+        .onChange(of: selectedSection) { _, tab in
             if tab == .history {
                 browser.reload()
                 meetings.reload()
@@ -280,6 +223,39 @@ struct SettingsView: View {
 
     // MARK: - dictation
 
+    /// one section at a time. panes that are not yet their own grouped
+    /// form still scroll, so nothing long is ever cut off.
+    @ViewBuilder
+    private func detail(for section: SettingsSection) -> some View {
+        switch section {
+        case .home:
+            Text("Home")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .dictation:
+            ScrollView { dictationTab }
+        case .listening:
+            ScrollView {
+                OrbPickerRow(settings: settings)
+                    .padding(24)
+            }
+        case .ai:
+            RewriteSettingsView(
+                settings: coordinator.rewriteSettings,
+                accounts: coordinator.rewriteAccounts,
+                dictationKey: settings.dictationHotkey
+            )
+        case .meetings:
+            ScrollView { meetingsTab }
+        case .dictionary:
+            dictionaryTab
+        case .history:
+            historyTab
+        case .general:
+            ScrollView { generalTab }
+        }
+    }
+
     private var dictationTab: some View {
         VStack(alignment: .leading, spacing: 13) {
             // only when something is actually wrong: three permanent green
@@ -302,8 +278,6 @@ struct SettingsView: View {
                 option: .soundFeedback,
                 settings: settings
             )
-            rowDivider
-            OrbPickerRow(settings: settings)
             rowDivider
             PipelineView(coordinator: coordinator, settings: settings)
             rowDivider
