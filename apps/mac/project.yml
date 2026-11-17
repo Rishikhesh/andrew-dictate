@@ -182,6 +182,8 @@ targets:
       - Sources/HUD/PillCountdown.swift
       - Sources/UI/BrandUI.swift
       - Sources/Settings/AppSettings.swift
+      - Sources/HUD/ListeningOrb.swift
+      - Sources/HUD/OrbMotion.swift
       - Sources/Settings/DictationOption.swift
       - Sources/Settings/EngineSwitchState.swift
       - Sources/Onboarding/OnboardingState.swift
