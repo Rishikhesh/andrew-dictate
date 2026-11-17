@@ -38,7 +38,7 @@ The gold lamp line that shows while you dictate felt dated. After eleven rounds 
 - **The chip.** A new `HUD/OrbChip.swift` view: a circle about 44 pt across, made of Liquid Glass tinted dark (so the light dots read over any wallpaper), with a `ThinkingOrb(state:, theme: .dark, displaySize:)` inside it about 34 pt across. It joins the existing `GlassEffectContainer`, so it morphs with the text pills the way the lamp does now.
 - **Each state of the take**, mapped from the coordinator's existing states:
   - `prewarming`, and `recording` before the mic is heard: the orb at a slow speed (about 0.6×) and 60% opacity.
-  - `recording`: full opacity. Speed is `0.7 + 1.8 × loudness` and size is `1 + 0.14 × loudness`, both from the view model's existing smoothed `loudness`.
+  - `recording`: speed `0.5 + 2.5 × loudness`, orb size `0.85 + 0.45 × loudness`, opacity `0.7 + 0.3 × loudness`, and the chip `1 + 0.18 × loudness`, all from the view model's existing smoothed `loudness`. (Revised after a hands-on run: the first numbers moved the orb only 6–10% at normal speech, which read as static.)
   - `transcribing`: a steady 1.0× speed at normal size.
   - `idle`: the chip leaves the way the panel already hides.
 - **No background.** With the chip switched off, the orb draws on its own with no glass behind it. Its light dots get a faint dark shadow so they still read over a bright window. The chip keeps the same size either way, so turning the switch never moves the orb.

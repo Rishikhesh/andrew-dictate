@@ -35,23 +35,43 @@ struct OrbMotion: Equatable, Sendable {
     /// the orb picks up where it was instead of leaping ahead.
     static let maximumStep: Double = 0.1
 
+    // the voice has to be seen. ordinary speech sits mid-range (about 0.5
+    // after `WaveLevelShaper`), so the ranges are wide: between words the
+    // orb draws in, dims and slows; a loud syllable swells it, brightens it
+    // and speeds it up, and the chip breathes with it.
     static func speed(_ phase: OrbPhase, loudness: Float) -> Double {
         switch phase {
         case .waiting: 0.6
-        case .hearing: 0.7 + 1.8 * clamped(loudness)
+        case .hearing: 0.5 + 2.5 * clamped(loudness)
         case .transcribing: 1.0
         }
     }
 
     static func scale(_ phase: OrbPhase, loudness: Float, reduceMotion: Bool) -> Double {
+        guard !reduceMotion else {
+            return 1
+        }
+        switch phase {
+        case .waiting: return 0.85
+        case .hearing: return 0.85 + 0.45 * clamped(loudness)
+        case .transcribing: return 1.0
+        }
+    }
+
+    static func opacity(_ phase: OrbPhase, loudness: Float) -> Double {
+        switch phase {
+        case .waiting: 0.6
+        case .hearing: 0.7 + 0.3 * clamped(loudness)
+        case .transcribing: 1.0
+        }
+    }
+
+    /// the glass chip behind the orb, breathing with the voice.
+    static func chipScale(_ phase: OrbPhase, loudness: Float, reduceMotion: Bool) -> Double {
         guard phase == .hearing, !reduceMotion else {
             return 1
         }
-        return 1 + 0.14 * clamped(loudness)
-    }
-
-    static func opacity(_ phase: OrbPhase) -> Double {
-        phase == .waiting ? 0.6 : 1
+        return 1 + 0.18 * clamped(loudness)
     }
 
     /// the time to hand the orb: a frozen time is raw engine time, which

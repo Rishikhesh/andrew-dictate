@@ -14,7 +14,7 @@ struct OrbChip: View {
     let glassNamespace: Namespace.ID
 
     static let chipSize: CGFloat = 44
-    static let orbSize: CGFloat = 34
+    static let orbSize: CGFloat = 36
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var motion = OrbMotion()
@@ -29,8 +29,14 @@ struct OrbChip: View {
                     motion.advance(by: dt, phase: phase, loudness: loudness)
                 }
         }
-        .frame(width: Self.chipSize, height: Self.chipSize)
+        .frame(width: chipSide, height: chipSide)
         .modifier(ChipBackground(on: background, glassID: glassID, glassNamespace: glassNamespace))
+    }
+
+    /// the chip grows with the voice; its frame, not a scale effect, so the
+    /// glass stays crisp and morphs with the stage.
+    private var chipSide: CGFloat {
+        Self.chipSize * OrbMotion.chipScale(phase, loudness: loudness, reduceMotion: reduceMotion)
     }
 
     private var orbView: some View {
@@ -44,7 +50,7 @@ struct OrbChip: View {
         )
         // reduce motion: the orb's own still frame, so no clock of ours.
         .orbFrozenTime(reduceMotion ? nil : motion.engineTime(presetSpeed: presetSpeed))
-        .opacity(OrbMotion.opacity(phase))
+        .opacity(OrbMotion.opacity(phase, loudness: loudness))
         .shadow(color: .black.opacity(background ? 0 : 0.45), radius: 6)
     }
 }

@@ -3,32 +3,50 @@ import XCTest
 /// The orb keeps one shape for the whole take; the voice only moves its
 /// speed and its size. These pin the numbers the design settled on.
 final class OrbMotionTests: XCTestCase {
+    // the voice has to be seen: between words the orb draws in and dims,
+    // a loud syllable swells it, brightens it and speeds it up.
     func testHearingSpeedAndScaleFollowLoudness() {
-        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 0), 0.7, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 1), 2.5, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 0, reduceMotion: false), 1, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 1, reduceMotion: false), 1.14, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 0), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 1), 3.0, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 0, reduceMotion: false), 0.85, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 1, reduceMotion: false), 1.3, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.opacity(.hearing, loudness: 0), 0.7, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.opacity(.hearing, loudness: 1), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.chipScale(.hearing, loudness: 0, reduceMotion: false), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.chipScale(.hearing, loudness: 1, reduceMotion: false), 1.18, accuracy: 1e-9)
+    }
+
+    // normal speech sits mid-range (about 0.5): the change has to be plain
+    // there, not only at the top.
+    func testOrdinarySpeechIsClearlyVisible() {
+        let quiet = OrbMotion.scale(.hearing, loudness: 0, reduceMotion: false)
+        let talking = OrbMotion.scale(.hearing, loudness: 0.5, reduceMotion: false)
+        XCTAssertGreaterThanOrEqual(talking / quiet, 1.25)
     }
 
     func testWaitingIsSlowAndDim() {
         XCTAssertEqual(OrbMotion.speed(.waiting, loudness: 1), 0.6, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.opacity(.waiting), 0.6, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.scale(.waiting, loudness: 1, reduceMotion: false), 1, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.opacity(.waiting, loudness: 1), 0.6, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.waiting, loudness: 1, reduceMotion: false), 0.85, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.chipScale(.waiting, loudness: 1, reduceMotion: false), 1.0, accuracy: 1e-9)
     }
 
     func testTranscribingIsSteady() {
         XCTAssertEqual(OrbMotion.speed(.transcribing, loudness: 1), 1.0, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.opacity(.transcribing), 1, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.opacity(.transcribing, loudness: 1), 1, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.transcribing, loudness: 1, reduceMotion: false), 1.0, accuracy: 1e-9)
     }
 
     func testLoudnessIsClampedAndNaNIsSilence() {
-        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: .nan), 0.7, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 5, reduceMotion: false), 1.14, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: -3, reduceMotion: false), 1, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: .nan), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 5, reduceMotion: false), 1.3, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: -3, reduceMotion: false), 0.85, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.chipScale(.hearing, loudness: .infinity, reduceMotion: false), 1.0, accuracy: 1e-9)
     }
 
     func testReduceMotionNeverScales() {
         XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 1, reduceMotion: true), 1, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.chipScale(.hearing, loudness: 1, reduceMotion: true), 1, accuracy: 1e-9)
     }
 
     func testTimeOnlyMovesForward() {
