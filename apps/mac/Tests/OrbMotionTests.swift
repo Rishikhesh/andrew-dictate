@@ -100,31 +100,20 @@ final class OrbMotionTests: XCTestCase {
         XCTAssertEqual(OrbSizeChoice.defaultSize, .large)
     }
 
-    // tone: higher than your usual voice lifts and stretches the orb and
-    // quickens it; lower settles and widens it and slows it.
-    func testHighToneLiftsStretchesAndQuickens() {
-        XCTAssertEqual(OrbMotion.lift(.hearing, tone: 1, reduceMotion: false), 0.08, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.lift(.hearing, tone: -1, reduceMotion: false), -0.08, accuracy: 1e-9)
-        let high = OrbMotion.stretch(.hearing, tone: 1, reduceMotion: false)
-        XCTAssertEqual(high.x, 0.92, accuracy: 1e-9)
-        XCTAssertEqual(high.y, 1.12, accuracy: 1e-9)
-        let low = OrbMotion.stretch(.hearing, tone: -1, reduceMotion: false)
-        XCTAssertEqual(low.x, 1.08, accuracy: 1e-9)
-        XCTAssertEqual(low.y, 0.88, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 0, tone: 1), 0.5 * 1.35, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 0, tone: -1), 0.5 * 0.65, accuracy: 1e-9)
+    // tone only ever changes the orb's size, never its shape: a higher
+    // voice makes it a little bigger, a lower one a little smaller, on top
+    // of loudness.
+    func testToneGrowsAndShrinksTheOrbOnly() {
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 0.5, tone: 1, reduceMotion: false), 0.85 + 0.225 + 0.12, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 0.5, tone: -1, reduceMotion: false), 0.85 + 0.225 - 0.12, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.speed(.hearing, loudness: 0.5), 0.5 + 1.25, accuracy: 1e-9)
     }
 
-    func testToneOnlyMovesTheOrbWhileHearing() {
-        XCTAssertEqual(OrbMotion.lift(.transcribing, tone: 1, reduceMotion: false), 0, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.stretch(.waiting, tone: 1, reduceMotion: false).y, 1, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.speed(.transcribing, loudness: 0, tone: 1), 1.0, accuracy: 1e-9)
-    }
-
-    func testToneIsClampedAndReduceMotionHoldsStill() {
-        XCTAssertEqual(OrbMotion.lift(.hearing, tone: 9, reduceMotion: false), 0.08, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.lift(.hearing, tone: .nan, reduceMotion: false), 0, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.lift(.hearing, tone: 1, reduceMotion: true), 0, accuracy: 1e-9)
-        XCTAssertEqual(OrbMotion.stretch(.hearing, tone: 1, reduceMotion: true).y, 1, accuracy: 1e-9)
+    func testToneSizeStaysInBoundsAndOnlyWhileHearing() {
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 1, tone: 1, reduceMotion: false), 1.4, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 0, tone: -1, reduceMotion: false), 0.75, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 0.5, tone: .nan, reduceMotion: false), 1.075, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.transcribing, loudness: 0, tone: 1, reduceMotion: false), 1.0, accuracy: 1e-9)
+        XCTAssertEqual(OrbMotion.scale(.hearing, loudness: 1, tone: 1, reduceMotion: true), 1.0, accuracy: 1e-9)
     }
 }

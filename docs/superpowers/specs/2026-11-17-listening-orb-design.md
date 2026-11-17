@@ -64,4 +64,4 @@ The exact chip and orb sizes (80 and 70 pt after a hands-on run; the stage is ab
 - **Pitch, not only loudness.**
   - **Measuring.** The mic tap estimates the voice's fundamental pitch for each buffer: normalised autocorrelation over 70–450 Hz on a signal decimated to about 12 kHz, and only when the buffer is loud enough and the correlation peak is at least 0.6.
   - **Tone.** A `ToneTracker` keeps a slow running baseline of your own pitch in octaves, and turns each estimate into a tone from -1 (half an octave below your usual) to +1 (half an octave above). With no voiced pitch, the tone eases back to 0.
-  - **What the orb does.** A higher tone lifts the orb by up to 8% of its size, stretches it taller (`y = 1 + 0.12 × tone`, `x = 1 − 0.08 × tone`) and speeds it up (`× (1 + 0.35 × tone)`). A lower tone does the opposite. Reduce Motion turns lift and stretch off.
+  - **What the orb does.** Tone only changes the orb's size, never its shape: the size becomes `0.85 + 0.45 × loudness + 0.12 × tone`, kept between 0.75 and 1.4. (Revision 3: lifting it and stretching it taller or wider was tried and dropped, because the shape change looked wrong.)

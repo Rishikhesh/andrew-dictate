@@ -39,40 +39,29 @@ struct OrbMotion: Equatable, Sendable {
     // after `WaveLevelShaper`), so the ranges are wide: between words the
     // orb draws in, dims and slows; a loud syllable swells it, brightens it
     // and speeds it up, and the chip breathes with it.
-    static func speed(_ phase: OrbPhase, loudness: Float, tone: Double = 0) -> Double {
+    static func speed(_ phase: OrbPhase, loudness: Float) -> Double {
         switch phase {
         case .waiting: 0.6
-        case .hearing: (0.5 + 2.5 * clamped(loudness)) * (1 + 0.35 * clampedTone(tone))
+        case .hearing: 0.5 + 2.5 * clamped(loudness)
         case .transcribing: 1.0
         }
     }
 
-    /// how far the orb rises with a higher tone (falls with a lower), as a
-    /// fraction of its size.
-    static func lift(_ phase: OrbPhase, tone: Double, reduceMotion: Bool) -> Double {
-        guard phase == .hearing, !reduceMotion else {
-            return 0
-        }
-        return 0.08 * clampedTone(tone)
-    }
-
-    /// higher: taller and narrower. lower: wider and flatter.
-    static func stretch(_ phase: OrbPhase, tone: Double, reduceMotion: Bool) -> (x: Double, y: Double) {
-        guard phase == .hearing, !reduceMotion else {
-            return (1, 1)
-        }
-        let t = clampedTone(tone)
-        return (1 - 0.08 * t, 1 + 0.12 * t)
-    }
-
-    static func scale(_ phase: OrbPhase, loudness: Float, reduceMotion: Bool) -> Double {
+    /// the orb's size against its resting size. it only ever grows and
+    /// shrinks, never changes shape: louder is bigger, and a voice higher
+    /// than your usual is a little bigger again, lower a little smaller.
+    static func scale(_ phase: OrbPhase, loudness: Float, tone: Double = 0, reduceMotion: Bool) -> Double {
         guard !reduceMotion else {
             return 1
         }
         switch phase {
-        case .waiting: return 0.85
-        case .hearing: return 0.85 + 0.45 * clamped(loudness)
-        case .transcribing: return 1.0
+        case .waiting:
+            return 0.85
+        case .hearing:
+            let size = 0.85 + 0.45 * clamped(loudness) + 0.12 * clampedTone(tone)
+            return min(max(size, 0.75), 1.4)
+        case .transcribing:
+            return 1.0
         }
     }
 
@@ -98,9 +87,9 @@ struct OrbMotion: Equatable, Sendable {
         time * presetSpeed
     }
 
-    mutating func advance(by dt: Double, phase: OrbPhase, loudness: Float, tone: Double = 0) {
+    mutating func advance(by dt: Double, phase: OrbPhase, loudness: Float) {
         let step = min(max(dt.isFinite ? dt : 0, 0), Self.maximumStep)
-        time += step * Self.speed(phase, loudness: loudness, tone: tone)
+        time += step * Self.speed(phase, loudness: loudness)
     }
 
     private static func clampedTone(_ tone: Double) -> Double {

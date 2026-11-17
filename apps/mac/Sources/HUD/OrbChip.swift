@@ -26,7 +26,7 @@ struct OrbChip: View {
                 .onChange(of: timeline.date) { _, now in
                     let dt = lastTick.map { now.timeIntervalSince($0) } ?? 0
                     lastTick = now
-                    motion.advance(by: dt, phase: phase, loudness: loudness, tone: tone)
+                    motion.advance(by: dt, phase: phase, loudness: loudness)
                 }
         }
         .frame(width: chipSide, height: chipSide)
@@ -40,7 +40,7 @@ struct OrbChip: View {
     }
 
     private var orbView: some View {
-        let scale = OrbMotion.scale(phase, loudness: loudness, reduceMotion: reduceMotion)
+        let scale = OrbMotion.scale(phase, loudness: loudness, tone: tone, reduceMotion: reduceMotion)
         let state = OrbState(rawValue: orb.rawValue) ?? .composing
         let presetSpeed = resolvePreset(state, .px64).speed
         return ThinkingOrb(
@@ -50,12 +50,6 @@ struct OrbChip: View {
         )
         // reduce motion: the orb's own still frame, so no clock of ours.
         .orbFrozenTime(reduceMotion ? nil : motion.engineTime(presetSpeed: presetSpeed))
-        // tone: higher rises and stands taller, lower settles and widens.
-        .scaleEffect(
-            x: OrbMotion.stretch(phase, tone: tone, reduceMotion: reduceMotion).x,
-            y: OrbMotion.stretch(phase, tone: tone, reduceMotion: reduceMotion).y
-        )
-        .offset(y: -size.orb * OrbMotion.lift(phase, tone: tone, reduceMotion: reduceMotion))
         .opacity(OrbMotion.opacity(phase, loudness: loudness))
         .shadow(color: .black.opacity(background ? 0 : 0.45), radius: 6)
     }
