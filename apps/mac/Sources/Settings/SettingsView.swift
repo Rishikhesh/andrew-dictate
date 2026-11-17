@@ -222,10 +222,7 @@ struct SettingsView: View {
         case .dictation:
             dictationTab
         case .listening:
-            ScrollView {
-                OrbPickerRow(settings: settings)
-                    .padding(24)
-            }
+            ListeningPane(settings: settings)
         case .ai:
             RewriteSettingsView(
                 settings: coordinator.rewriteSettings,

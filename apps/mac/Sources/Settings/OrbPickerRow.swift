@@ -1,9 +1,8 @@
 import SwiftUI
 import ThinkingOrbsKit
 
-/// which orb listens while you talk: all nine, live, so you choose by
-/// watching them; and whether it sits on its dark chip.
-struct OrbPickerRow: View {
+/// the nine orbs, live, so you choose by watching them.
+struct OrbGrid: View {
     @ObservedObject var settings: AppSettings
 
     private let columns = Array(
@@ -12,37 +11,12 @@ struct OrbPickerRow: View {
     )
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SettingsRowLabel(
-                "orb",
-                explanation: "what listens while you talk. one for the whole take; your voice only changes its pace and size."
-            )
-
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(ListeningOrb.allCases) { orb in
-                    choice(orb)
-                }
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(ListeningOrb.allCases) { orb in
+                choice(orb)
             }
-
-            HStack {
-                SettingsRowLabel("size", explanation: "how big the orb is drawn while you talk.")
-                Spacer(minLength: 8)
-                Picker("size", selection: $settings.orbSize) {
-                    ForEach(OrbSizeChoice.allCases) { size in
-                        Text(size.displayName).tag(size)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-            }
-
-            SettingsToggleRow(
-                "background",
-                explanation: "a small dark chip behind the orb, so it reads over any window.",
-                isOn: $settings.orbBackground
-            )
         }
+        .padding(.vertical, 6)
     }
 
     private func choice(_ orb: ListeningOrb) -> some View {
@@ -50,13 +24,14 @@ struct OrbPickerRow: View {
         return Button {
             settings.listeningOrb = orb
         } label: {
-            VStack(spacing: 5) {
+            VStack(spacing: 6) {
                 ThinkingOrb(
                     state: OrbState(rawValue: orb.rawValue) ?? .composing,
                     theme: .auto,
-                    displaySize: 40
+                    displaySize: 44
                 )
-                .padding(4)
+                .padding(5)
+                .background(Circle().fill(.quaternary.opacity(selected ? 1 : 0.4)))
                 .overlay(
                     Circle()
                         .strokeBorder(.tint, lineWidth: 2)
