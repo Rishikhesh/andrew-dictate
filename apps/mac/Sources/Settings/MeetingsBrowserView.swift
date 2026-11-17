@@ -8,12 +8,15 @@ import SwiftUI
 struct MeetingsBrowserView: View {
     @ObservedObject var viewModel: MeetingsListModel
 
+    /// a meeting is other people's words too: deleting one asks first.
+    @State private var pendingDelete: MeetingSummary?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let failure = viewModel.failure {
                 Text(failure)
                     .font(.caption)
-                    .foregroundStyle(BrandUI.attention)
+                    .foregroundStyle(.red)
                     .padding(.horizontal, 18)
                     .padding(.top, 14)
             }
@@ -24,18 +27,17 @@ struct MeetingsBrowserView: View {
             if viewModel.setAsideCount > 0, let folder = viewModel.setAsideFolder {
                 HStack(spacing: 8) {
                     Text(setAsideSentence)
-                        .font(BrandUI.bodyFont)
-                        .foregroundStyle(BrandUI.attention)
+                                    .foregroundStyle(.red)
 
                     if viewModel.canTryAgain {
-                        Button("try again") {
+                        Button("Try Again") {
                             Task { await viewModel.tryAgain() }
                         }
                         .font(.caption)
                         .disabled(viewModel.tryingAgain)
                     }
 
-                    Button("show in finder") {
+                    Button("Show in Finder") {
                         NSWorkspace.shared.activateFileViewerSelecting([folder])
                     }
                     .font(.caption)
@@ -52,8 +54,7 @@ struct MeetingsBrowserView: View {
                         ? "nothing matches “\(viewModel.trimmedQuery)”."
                         : "no meetings yet."
                 )
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.textSecondary)
+                    .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
@@ -65,9 +66,9 @@ struct MeetingsBrowserView: View {
                                 again: viewModel.again(for: meeting),
                                 transcribeAgain: { viewModel.transcribeAgain(meeting, with: $0) },
                                 deleteAudio: { viewModel.deleteAudio(of: meeting) },
-                                delete: { viewModel.delete(meeting) }
+                                delete: { pendingDelete = meeting }
                             )
-                            Divider().overlay(BrandUI.hairline)
+                            Divider()
                         }
                     }
                     .padding(.vertical, 6)
@@ -75,17 +76,32 @@ struct MeetingsBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .preferredColorScheme(.dark)
+        .confirmationDialog(
+            "Delete this meeting?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            presenting: pendingDelete
+        ) { meeting in
+            Button("Delete", role: .destructive) {
+                viewModel.delete(meeting)
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: { _ in
+            Text("The transcript and any kept audio are deleted. This can’t be undone.")
+        }
     }
 
     /// what the line says: how many, or that they are being tried.
     private var setAsideSentence: String {
         if viewModel.tryingAgain {
-            return "trying again…"
+            return "Trying again…"
         }
         return viewModel.setAsideCount == 1
-            ? "1 recording couldn't be transcribed"
-            : "\(viewModel.setAsideCount) recordings couldn't be transcribed"
+            ? "1 recording couldn’t be transcribed"
+            : "\(viewModel.setAsideCount) recordings couldn’t be transcribed"
     }
 }
 
@@ -99,7 +115,6 @@ private struct MeetingRow: View {
     let deleteAudio: () -> Void
     let delete: () -> Void
 
-    @State private var isHovering = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -110,17 +125,16 @@ private struct MeetingRow: View {
                         time: .shortened
                     )
                 )
-                .foregroundStyle(BrandUI.textPrimary)
 
                 separator
                 Text(meeting.app)
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 separator
                 Text(meeting.duration.spoken)
-                    .font(BrandUI.machineFont(size: 12))
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
 
                 separator
                 Text(completeness.text)
@@ -131,7 +145,7 @@ private struct MeetingRow: View {
                 if let audioNote {
                     separator
                     Text(audioNote)
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
@@ -139,40 +153,44 @@ private struct MeetingRow: View {
                 // it is happening.
                 if again == .running {
                     separator
-                    Text("transcribing again…")
-                        .foregroundStyle(BrandUI.textSecondary)
+                    Text("Transcribing again…")
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
-            .font(BrandUI.bodyFont)
 
             Spacer(minLength: 8)
 
-            // actions appear on hover: a list that grows for years should
-            // not be a wall of buttons.
-            HStack(spacing: 6) {
-                Button("open", action: open)
-                    .help("open the transcript")
-                Button("show in finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting(
-                        [meeting.fileURL]
-                    )
-                }
-                againAction
-                if audioNote != nil {
-                    Button("delete audio now", action: deleteAudio)
-                        .help("the transcript stays")
-                }
-                Button("delete", action: delete)
+            // every action in sight: the menu, and the same on right-click.
+            Menu {
+                actions
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-            .font(.caption)
-            .opacity(isHovering ? 1 : 0)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Actions")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 9)
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: open)
-        .onHover { isHovering = $0 }
+        .contextMenu { actions }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        Button("Open", action: open)
+        Button("Show in Finder") {
+            NSWorkspace.shared.activateFileViewerSelecting([meeting.fileURL])
+        }
+        againAction
+        if audioNote != nil {
+            Button("Delete Audio Now", action: deleteAudio)
+        }
+        Divider()
+        Button("Delete…", role: .destructive, action: delete)
     }
 
     /// while the audio is kept, the models to read it again with. off, it
@@ -183,19 +201,16 @@ private struct MeetingRow: View {
         case .none:
             EmptyView()
         case .offer(let models):
-            Menu("transcribe again with") {
+            Menu("Transcribe Again With") {
                 ForEach(models, id: \.self) { model in
-                    Button(model.shortName) { transcribeAgain(model) }
+                    Button(model.shortName.capitalizedFirst) { transcribeAgain(model) }
                 }
             }
-            .help("read the kept audio again; the transcript is replaced")
         case .wait(let why):
-            Text(why)
-                .foregroundStyle(BrandUI.textSecondary)
-            Menu("transcribe again with") {}
+            Button("Transcribe Again: \(why.capitalizedFirst)") {}
                 .disabled(true)
         case .running:
-            Menu("transcribe again with") {}
+            Button("Transcribing Again…") {}
                 .disabled(true)
         }
     }
@@ -219,7 +234,7 @@ private struct MeetingRow: View {
 
     private var separator: some View {
         Text("·")
-            .foregroundStyle(BrandUI.textSecondary)
+            .foregroundStyle(.secondary)
             .accessibilityHidden(true)
     }
 
@@ -227,18 +242,18 @@ private struct MeetingRow: View {
     /// looking whole, so anything short of complete is drawn in attention.
     private var completeness: (text: String, tint: Color) {
         if meeting.recovered {
-            return ("recovered", BrandUI.attention)
+            return ("Recovered", .red)
         }
         if meeting.gapCount > 0 {
             return (
                 meeting.gapCount == 1 ? "1 gap" : "\(meeting.gapCount) gaps",
-                BrandUI.attention
+                .red
             )
         }
         if !meeting.complete {
-            return ("incomplete", BrandUI.attention)
+            return ("Incomplete", .red)
         }
-        return ("complete", BrandUI.textSecondary)
+        return ("Complete", .secondary)
     }
 }
 

@@ -6,15 +6,19 @@ struct ArchiveBrowserView: View {
     @ObservedObject var viewModel: ArchiveBrowserViewModel
     let fixAWord: (String) -> Void
 
+    /// one dictation at a time, and only after asking: a mis-click on a
+    /// row should never cost something you said.
+    @State private var pendingDelete: Dictation?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let failure = viewModel.failure {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(failure)
-                        .foregroundStyle(BrandUI.attention)
+                    Text(failure.capitalizedFirst)
+                        .foregroundStyle(.red)
                     // somewhere to go: the file it could not read.
                     Text(viewModel.archivePath)
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
                 .font(.caption)
@@ -31,11 +35,10 @@ struct ArchiveBrowserView: View {
                     // either.
                     Text(
                         viewModel.isSearching
-                            ? "nothing matches “\(viewModel.trimmedQuery)”."
-                            : "nothing kept yet."
+                            ? "Nothing matches “\(viewModel.trimmedQuery)”."
+                            : "Nothing kept yet."
                     )
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
@@ -46,9 +49,9 @@ struct ArchiveBrowserView: View {
                                 dictation: item,
                                 query: viewModel.trimmedQuery,
                                 fixAWord: { fixAWord(item.heard) },
-                                delete: { viewModel.delete(item) }
+                                delete: { pendingDelete = item }
                             )
-                            Divider().overlay(BrandUI.hairline)
+                            Divider()
                         }
                     }
                     .padding(.vertical, 6)
@@ -56,8 +59,23 @@ struct ArchiveBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .preferredColorScheme(.dark)
         .onAppear { viewModel.reload() }
+        .confirmationDialog(
+            "Delete this dictation?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            presenting: pendingDelete
+        ) { dictation in
+            Button("Delete", role: .destructive) {
+                viewModel.delete(dictation)
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: { _ in
+            Text("This can’t be undone.")
+        }
     }
 }
 
@@ -69,15 +87,11 @@ private struct ArchiveRow: View {
     let fixAWord: () -> Void
     let delete: () -> Void
 
-    @State private var isHovering = false
-    @State private var copied = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(highlighted(dictation.inserted))
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textPrimary)
                     .lineLimit(3)
                     .textSelection(.enabled)
 
@@ -98,36 +112,40 @@ private struct ArchiveRow: View {
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 8)
 
-            // Actions appear on hover: a list of hundreds of rows should not
-            // be a wall of buttons.
-            HStack(spacing: 6) {
-                Button(action: copy) {
-                    // the label says it happened, in place. a pinned width
-                    // keeps the two buttons beside it from shifting.
-                    Text(copied ? "copied" : "copy")
-                        .frame(width: 44, alignment: .leading)
-                }
-                Button("fix a word", action: fixAWord)
-                Button("delete", action: delete)
+            // every action in sight: the menu, and the same on right-click.
+            Menu {
+                actions
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-            .font(.caption)
-            .opacity(isHovering ? 1 : 0)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Actions")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 9)
         .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
+        .contextMenu { actions }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        Button("Copy", action: copy)
+        Button("Fix a Word…", action: fixAWord)
+        Divider()
+        Button("Delete…", role: .destructive, action: delete)
     }
 
     private var isSearching: Bool { !query.isEmpty }
 
     private var heardLine: AttributedString {
-        var line = AttributedString("heard “")
+        var line = AttributedString("Heard “")
         line += highlighted(dictation.heard)
         line += AttributedString("”")
         return line
@@ -148,7 +166,7 @@ private struct ArchiveRow: View {
         ) {
             if let lower = AttributedString.Index(found.lowerBound, within: out),
                let upper = AttributedString.Index(found.upperBound, within: out) {
-                out[lower..<upper].mergeAttributes(Self.ink(BrandUI.gold))
+                out[lower..<upper].mergeAttributes(Self.ink(SystemAccent.color))
             }
             from = found.upperBound
         }
@@ -173,11 +191,6 @@ private struct ArchiveRow: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(dictation.inserted, forType: .string)
-        copied = true
-        Task {
-            try? await Task.sleep(for: .seconds(1.2))
-            copied = false
-        }
     }
 }
 

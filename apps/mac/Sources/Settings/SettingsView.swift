@@ -33,7 +33,6 @@ struct SettingsView: View {
     @State private var timings: TimelineSummary?
     /// lit for a quarter second every time the bound key is pressed.
     @State private var keyChipLit = false
-    @FocusState private var searchFocused: Bool
 
     /// `meetingsLoader` is left open on purpose: this pane knows how to draw
     /// the meetings folder, not where it is or how to read it.
@@ -158,10 +157,10 @@ struct SettingsView: View {
         // the archive is the one thing here that does not come back: the file
         // is unlinked, not trashed, so the wipe asks first.
         .alert(
-            "delete everything you’ve dictated?",
+            "Delete everything you’ve dictated?",
             isPresented: $pendingArchiveWipe
         ) {
-            Button("delete all", role: .destructive) {
+            Button("Delete All", role: .destructive) {
                 archive.deleteEverything()
                 browser.reload()
             }
@@ -388,107 +387,67 @@ struct SettingsView: View {
     /// is a footer, because it's set once and never looked at again.
     private var historyTab: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Picker("", selection: $historySegment) {
-                    ForEach(HistorySegment.allCases) { segment in
-                        Text(segment.rawValue).tag(segment)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 240)
-                .accessibilityLabel("what history shows")
-
-                Spacer(minLength: 8)
-
-                historySearchField
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 10)
-
-            // there is no menu bar to hang a Find item on, so ⌘F is a button
-            // with nothing to look at.
-            Button("find in history") { searchFocused = true }
-                .keyboardShortcut("f", modifiers: .command)
-                .frame(width: 0, height: 0)
-                .opacity(0)
-                .accessibilityHidden(true)
-
             switch historySegment {
             case .dictations:
                 ArchiveBrowserView(
                     viewModel: browser,
                     fixAWord: { coordinator.openWordFixer(for: $0) }
                 )
-                .frame(height: 330)
             case .meetings:
                 MeetingsBrowserView(viewModel: meetings)
-                    .frame(height: 330)
             }
 
-            rowDivider
-                .padding(.horizontal, 24)
+            Divider()
 
             switch historySegment {
             case .dictations: dictationsFooter
             case .meetings: meetingsFooter
             }
         }
-        .padding(.top, 8)
-    }
-
-    /// one field for two piles: each model owns its own query, so switching
-    /// segments leaves the other search where you left it.
-    @ViewBuilder private var historySearchField: some View {
-        switch historySegment {
-        case .dictations:
-            // "what you said" is dictation language on purpose — the other
-            // pile holds other people's words.
-            searchField("search what you said", text: $browser.query)
-        case .meetings:
-            searchField("search the meetings", text: $meetings.query)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Show", selection: $historySegment) {
+                    ForEach(HistorySegment.allCases) { segment in
+                        Text(segment.rawValue.capitalizedFirst).tag(segment)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .accessibilityLabel("What history shows")
+            }
         }
-    }
-
-    private func searchField(
-        _ prompt: String,
-        text: Binding<String>
-    ) -> some View {
-        TextField("", text: text, prompt: Text(prompt))
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 220)
-            .focused($searchFocused)
-            // esc empties the field rather than leaving you to select and
-            // delete what you typed.
-            .onExitCommand { text.wrappedValue = "" }
-            .accessibilityLabel(prompt)
+        // the toolbar's own search field: ⌘F finds it, Esc empties it. each
+        // pile keeps its own query, so switching leaves the other where it
+        // was. "what you said" is dictation language on purpose — the other
+        // pile holds other people's words.
+        .searchable(
+            text: historySegment == .dictations ? $browser.query : $meetings.query,
+            placement: .toolbar,
+            prompt: historySegment == .dictations ? "Search what you said" : "Search the meetings"
+        )
     }
 
     private var dictationsFooter: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 12) {
-                Toggle(
-                    "keep new dictations",
-                    isOn: $settings.keepDictations
-                )
-                .brandToggleStyle()
-                .font(BrandUI.bodyFont)
-
-                Spacer(minLength: 8)
+                Toggle("Keep new dictations", isOn: $settings.keepDictations)
+                    .toggleStyle(.switch)
 
                 // a count beside a failed read would be a number this pane
                 // cannot stand behind, so it offers the file instead.
                 if browser.failure == nil {
                     Text(keptCount)
                         .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.secondary)
                 } else {
-                    Button("show in finder") {
+                    Button("Show in Finder") {
                         showInFinder(browser.archiveURL)
                     }
                 }
 
-                Button("delete all") {
+                Spacer(minLength: 8)
+
+                Button("Delete All…") {
                     pendingArchiveWipe = true
                 }
                 // an archive the app could not read is not one it may erase.
@@ -499,40 +458,38 @@ struct SettingsView: View {
                         || browser.failure != nil
                 )
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
 
             // the list above already says this; twice in one pane reads like
             // two different problems.
             if browser.failure == nil, let failure = archive.failure {
-                Text(failure)
+                Text(failure.capitalizedFirst)
                     .font(.caption)
-                    .foregroundStyle(BrandUI.attention)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 10)
+                    .foregroundStyle(.red)
             }
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 
     /// no keep-or-not switch here: a meeting's transcript is kept until you
     /// delete it, and the folder it lives in is the whole feature. its audio
-    /// has a setting of its own, in the meetings tab.
+    /// has a setting of its own, in the meetings section.
     private var meetingsFooter: some View {
         HStack(spacing: 12) {
             Text(meetingsCount)
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
 
             Spacer(minLength: 8)
 
-            Button("show folder in finder") {
+            Button("Show Folder in Finder") {
                 showInFinder(
                     settings.meetingsFolder
                         .appendingPathComponent("meetings", isDirectory: true)
                 )
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
 
@@ -543,7 +500,7 @@ struct SettingsView: View {
         if browser.isSearching {
             return "\(browser.filtered.count) of \(kept) kept"
         }
-        return kept == 1 ? "1 kept" : "\(kept) kept"
+        return kept == 1 ? "1 kept" : "\(kept.formatted()) kept"
     }
 
     private var meetingsCount: String {
