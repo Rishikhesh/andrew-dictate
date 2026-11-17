@@ -186,6 +186,18 @@ private struct OpenSettingsAtLaunch: View {
                     return
                 }
                 view.cacheDisplay(in: view.bounds, to: rep)
+                // tables (the sidebar, the dictionary) draw in layers a
+                // cached snapshot can miss; their row counts say they're there.
+                var report: [String] = []
+                func walk(_ v: NSView, _ depth: Int) {
+                    if let table = v as? NSTableView {
+                        report.append("\(type(of: table)) rows=\(table.numberOfRows) frame=\(table.frame)")
+                    }
+                    if depth < 60 { v.subviews.forEach { walk($0, depth + 1) } }
+                }
+                walk(view, 0)
+                try? report.joined(separator: "\n")
+                    .write(toFile: path + ".txt", atomically: true, encoding: .utf8)
                 try? rep.representation(using: .png, properties: [:])?
                     .write(to: URL(fileURLWithPath: path))
             }

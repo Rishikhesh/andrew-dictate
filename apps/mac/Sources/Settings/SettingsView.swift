@@ -165,7 +165,7 @@ struct SettingsView: View {
                 archive.deleteEverything()
                 browser.reload()
             }
-            Button("cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(
                 ArchiveSettingsModel.wipeWarning(
@@ -362,9 +362,9 @@ struct SettingsView: View {
             // the pane used to open with an unlabelled grid, so the two
             // rules it already keeps — whole words, any capitalisation —
             // were things you found out by being confused.
-            Text("when andrew hears the word on the left, it writes the one on the right. whole words only, capitals don’t matter — this still applies with cleanup off.")
-                .font(.system(size: 11))
-                .foregroundStyle(BrandUI.textSecondary)
+            Text("When Andrew hears the word on the left, it writes the one on the right. Whole words only, and capitals don’t matter. This applies even with cleanup off.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             DictionaryEditor(
@@ -376,6 +376,9 @@ struct SettingsView: View {
         .padding(.horizontal, 24)
         .padding(.top, 18)
         .padding(.bottom, 20)
+        // the table takes what is left of the pane, never more: on its own
+        // it asks for thousands of points and pushes the intro off the top.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - history
@@ -987,10 +990,10 @@ private struct DictionaryEditor: View {
                         // says where it came from. an edit makes it plainly
                         // yours and the mark goes.
                         if entry.learned {
-                            Text("learned")
+                            Text("Learned")
                                 .font(.caption)
-                                .foregroundStyle(BrandUI.textSecondary)
-                                .help("andrew added this after you fixed the same word twice. remove it and it won’t come back.")
+                                .foregroundStyle(.secondary)
+                                .help("Andrew added this after you fixed the same word twice. Remove it and it won’t come back.")
                             // one click, and the same never-again as the
                             // menu's undo: the store remembers the pair.
                             Button {
@@ -1001,27 +1004,25 @@ private struct DictionaryEditor: View {
                                     .font(.caption)
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(BrandUI.textSecondary)
-                            .help("remove it. andrew won’t learn it again.")
+                            .foregroundStyle(.secondary)
+                            .help("Remove it. Andrew won’t learn it again.")
                             .accessibilityLabel("undo learned: \(entry.right)")
                         }
                     }
                 }
             }
             .tableStyle(.inset(alternatesRowBackgrounds: false))
-            .scrollContentBackground(.hidden)
-            .background(BrandUI.windowBg.opacity(0.55))
-            .frame(minWidth: 420, minHeight: 190)
+            .frame(minWidth: 420, minHeight: 190, maxHeight: .infinity)
             .overlay {
                 if store.entries.isEmpty {
                     // an unreadable file is not an empty dictionary, and
                     // must never be invited to look like one.
-                    Text(store.lastFailure ?? "teach andrew a word.")
+                    Text((store.lastFailure ?? "teach andrew a word.").capitalizedFirst)
                         .font(.caption)
                         .foregroundStyle(
                             store.lastFailure == nil
-                                ? BrandUI.textSecondary
-                                : BrandUI.gold
+                                ? AnyShapeStyle(.secondary)
+                                : AnyShapeStyle(.red)
                         )
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 18)
@@ -1037,9 +1038,8 @@ private struct DictionaryEditor: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(BrandUI.gold)
-                .help("add row")
+                .buttonStyle(.borderless)
+                .help("Add a word")
                 .accessibilityLabel("add dictionary entry")
 
                 Button {
@@ -1050,40 +1050,35 @@ private struct DictionaryEditor: View {
                 } label: {
                     Image(systemName: "minus")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(BrandUI.textSecondary)
+                .buttonStyle(.borderless)
                 .disabled(selection.isEmpty)
                 .accessibilityLabel("remove selected dictionary entries")
-                .help("delete selected row")
+                .help("Remove the selected words")
 
                 Spacer()
 
-                Button("import", action: importDictionary)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(BrandUI.textSecondary)
-                Button("export", action: exportDictionary)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Button("Import…", action: importDictionary)
+                Button("Export…", action: exportDictionary)
             }
             .padding(.horizontal, 2)
             .padding(.top, 2)
 
             if let message {
-                Text(message)
+                Text(message.capitalizedFirst)
                     .font(.caption)
-                    .foregroundStyle(BrandUI.gold)
+                    .foregroundStyle(.secondary)
             }
 
             // a dictionary that failed to load, import or save used to
             // look exactly like an empty one. the store says which.
             if let failure = store.lastFailure {
-                Text(failure)
+                Text(failure.capitalizedFirst)
                     .font(.caption)
-                    .foregroundStyle(BrandUI.gold)
+                    .foregroundStyle(.red)
             }
         }
         .alert(
-            "add these to your dictionary, or replace it?",
+            "Add these to your dictionary, or replace it?",
             isPresented: Binding(
                 get: { pendingImport != nil },
                 set: { presented in
@@ -1095,12 +1090,12 @@ private struct DictionaryEditor: View {
             presenting: pendingImport
         ) { pending in
             // ⏎ adds. the safe answer is the one your hands already have.
-            Button("add to mine") { addImport(pending) }
+            Button("Add to Mine") { addImport(pending) }
                 .keyboardShortcut(.defaultAction)
-            Button("replace", role: .destructive) {
+            Button("Replace", role: .destructive) {
                 replaceWithImport(pending)
             }
-            Button("cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: { pending in
             Text(
                 """
@@ -1118,11 +1113,12 @@ private struct DictionaryEditor: View {
     /// (right) from "kunur" (wrong), and nothing here is added for you.
     private var suggestionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            BrandSectionHeader("did it get these right?")
+            Text("Did it get these right?")
+                .font(.headline)
 
-            Text("words you said more than once that andrew doesn’t know. teach it the ones it got wrong.")
+            Text("Words you said more than once that Andrew doesn’t know. Teach it the ones it got wrong.")
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             ForEach(suggestions) { candidate in
@@ -1136,16 +1132,15 @@ private struct DictionaryEditor: View {
         _ candidate: RecurringMishearings.Candidate
     ) -> some View {
         HStack(spacing: 8) {
-            Text("heard “\(candidate.heard)”")
-                .font(BrandUI.machineFont(size: 12))
-                .foregroundStyle(BrandUI.goldPale)
+            Text("Heard “\(candidate.heard)”")
+                .font(.callout.monospaced())
 
             Text("· \(candidate.count) times")
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
 
             TextField(
-                "what you meant",
+                "What you meant",
                 text: Binding(
                     get: { draft(for: candidate) },
                     set: { drafts[candidate.heard] = $0 }
@@ -1155,22 +1150,19 @@ private struct DictionaryEditor: View {
             .frame(width: 150)
             .onSubmit { teach(candidate) }
 
-            Button("save") { teach(candidate) }
-                .buttonStyle(.plain)
-                .foregroundStyle(BrandUI.gold)
+            Button("Save") { teach(candidate) }
+                .buttonStyle(.borderedProminent)
                 .disabled(
                     draft(for: candidate)
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                         .isEmpty
                 )
 
-            Button("not a mistake") { dismiss(candidate) }
-                .buttonStyle(.plain)
-                .foregroundStyle(BrandUI.textSecondary)
+            Button("Not a Mistake") { dismiss(candidate) }
 
             Spacer(minLength: 0)
         }
-        .font(.system(size: 12))
+        .font(.callout)
     }
 
     /// a word you spelled out loud near it is the answer you already gave —
@@ -1320,12 +1312,12 @@ private struct DictionaryCellEditor: View {
     var body: some View {
         TextField("", text: $draft, prompt: Text(prompt))
             .labelsHidden()
-            .font(BrandUI.bodyFont)
+            .font(.body)
             .textFieldStyle(.plain)
             .padding(.vertical, 5)
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(BrandUI.hairline)
+                    .fill(.quaternary)
                     .frame(height: 1)
                     .accessibilityHidden(true)
             }
