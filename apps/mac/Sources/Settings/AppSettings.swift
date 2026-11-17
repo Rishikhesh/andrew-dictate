@@ -59,6 +59,27 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// which libraries.dev orb listens while you talk: one for the whole
+    /// take. a name this build does not know is the default.
+    @Published var listeningOrb: ListeningOrb {
+        didSet {
+            guard listeningOrb != oldValue else {
+                return
+            }
+            userDefaults.set(listeningOrb.rawValue, forKey: Self.listeningOrbKey)
+        }
+    }
+
+    /// the dark glass chip behind the orb; off, the orb floats on its own.
+    @Published var orbBackground: Bool {
+        didSet {
+            guard orbBackground != oldValue else {
+                return
+            }
+            userDefaults.set(orbBackground, forKey: Self.orbBackgroundKey)
+        }
+    }
+
     @Published private(set) var dictationHotkey: HotkeyBinding {
         didSet {
             guard dictationHotkey != oldValue else {
@@ -300,6 +321,8 @@ final class AppSettings: ObservableObject {
     private static let preRollKey = "AndrewDictate.preRollEnabled"
     private static let soundFeedbackKey =
         "AndrewDictate.soundFeedbackEnabled"
+    private static let listeningOrbKey = "AndrewDictate.listeningOrb"
+    private static let orbBackgroundKey = "AndrewDictate.orbBackground"
     private static let keepDictationsKey = "AndrewDictate.keepDictations"
     /// the key from when dictation only had parakeet to pick from, kept so
     /// the pick survives the update.
@@ -428,6 +451,15 @@ final class AppSettings: ObservableObject {
         ) == nil
             ? true
             : userDefaults.bool(forKey: Self.soundFeedbackKey)
+        listeningOrb = userDefaults
+            .string(forKey: Self.listeningOrbKey)
+            .flatMap(ListeningOrb.init(rawValue:)) ?? .defaultOrb
+        // unset means on: the chip keeps the light dots readable anywhere.
+        orbBackground = userDefaults.object(
+            forKey: Self.orbBackgroundKey
+        ) == nil
+            ? true
+            : userDefaults.bool(forKey: Self.orbBackgroundKey)
         // unset means on: this ships enabled, unlike pre-roll.
         keepDictations = userDefaults.object(
             forKey: Self.keepDictationsKey
