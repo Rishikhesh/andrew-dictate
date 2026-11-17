@@ -53,93 +53,54 @@ struct ModelCardView<Footer: View>: View {
         self.footer = footer
     }
 
+    /// one radio row in a grouped form: the choice, why you'd make it,
+    /// and what choosing it does, said before you do it.
     var body: some View {
         Button(action: choose) {
-            HStack(alignment: .top, spacing: 10) {
-                Circle()
-                    .strokeBorder(
-                        isChosen ? BrandUI.gold : BrandUI.textSecondary,
-                        lineWidth: 1.5
-                    )
-                    .background {
-                        if isChosen {
-                            Circle().fill(BrandUI.gold).padding(3.5)
-                        }
-                    }
-                    .frame(width: 14, height: 14)
-                    .padding(.top, 2)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: isChosen ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(isChosen ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .imageScale(.medium)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(name)
-                            .font(BrandUI.bodyFont.weight(.medium))
-                            .foregroundStyle(BrandUI.textPrimary)
-
-                        // an outline, not a fill: the filled pill is
-                        // `active`, and this must never read as it.
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(name.capitalizedFirst)
                         if let badge {
-                            Text(badge)
+                            Text(badge.capitalizedFirst)
                                 .font(.caption2.weight(.medium))
-                                .foregroundStyle(BrandUI.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1)
-                                .overlay {
-                                    Capsule().stroke(BrandUI.textSecondary.opacity(0.5), lineWidth: 1)
-                                }
+                                .overlay(Capsule().strokeBorder(.quaternary))
                         }
                     }
-
-                    Text(trait)
+                    Text(trait.capitalizedFirst)
                         .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
-
-                    HStack(spacing: 6) {
-                        Text(size)
-                            .font(BrandUI.machineFont(size: 11))
-                        Text("·")
-                        Text(state)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-                    .padding(.top, 4)
-
-                    if let progress {
-                        ProgressView(value: min(max(progress, 0), 1))
-                            .progressViewStyle(.linear)
-                            .tint(BrandUI.gold)
-                            .padding(.top, 2)
-                    }
-
+                        .foregroundStyle(.secondary)
                     footer()
                 }
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
 
-                if isActive {
-                    Text("active")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(BrandUI.goldPale)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background {
-                            Capsule().fill(BrandUI.goldDeep.opacity(0.22))
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 6) {
+                        if isActive {
+                            Text("Active")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.tint)
                         }
+                        Text("\(size) · \(state.capitalizedFirst)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    if let progress {
+                        ProgressView(value: progress)
+                            .frame(width: 120)
+                    }
                 }
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(BrandUI.cardBg.opacity(0.7))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(
-                        isChosen ? BrandUI.gold.opacity(0.7) : BrandUI.hairline,
-                        lineWidth: 1
-                    )
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(badge.map { "\(accessibilityName), \($0)" } ?? accessibilityName)
@@ -176,7 +137,8 @@ extension ModelCardView where Footer == EmptyView {
     }
 }
 
-/// two columns, ten apart — the shape every model picker in the app takes.
+/// the model choices as rows of the form section they sit in: each card
+/// is its own row, so the form draws the separators.
 struct ModelCardGrid<Content: View>: View {
     private let content: Content
 
@@ -184,14 +146,7 @@ struct ModelCardGrid<Content: View>: View {
         self.content = content()
     }
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10),
-    ]
-
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 10) {
-            content
-        }
+        content
     }
 }

@@ -41,3 +41,20 @@ final class SystemAccentTests: XCTestCase {
         XCTAssertEqual(SystemAccent.color(stored: -5), .blue)
     }
 }
+
+/// the app writes lowercase; settings shows it the way macOS writes.
+final class SentenceCaseTests: XCTestCase {
+    func testEverySentenceStartsWithACapital() {
+        XCTAssertEqual(
+            "hold it and talk. double-tap locks it on hands-free, tap once to end. esc cancels.".capitalizedFirst,
+            "Hold it and talk. Double-tap locks it on hands-free, tap once to end. Esc cancels."
+        )
+    }
+
+    func testAddressesAndKeyNamesAreLeftAlone() {
+        XCTAssertEqual("send it to jass.gg".capitalizedFirst, "Send it to jass.gg")
+        XCTAssertEqual("fn".capitalizedFirst, "fn")
+        XCTAssertEqual("right ⌥".capitalizedFirst, "Right ⌥")
+        XCTAssertEqual("".capitalizedFirst, "")
+    }
+}

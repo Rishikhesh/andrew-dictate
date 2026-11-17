@@ -188,32 +188,6 @@ struct SettingsView: View {
         )
     }
 
-    /// names what's missing, then hands back to onboarding — the one place
-    /// that knows how to ask macOS for any of it.
-    private var setupBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(setupIssues) { issue in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(issue.title)
-                        .font(BrandUI.bodyFont.weight(.medium))
-                        .foregroundStyle(BrandUI.attention)
-
-                    Text(issue.detail)
-                        .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
-                }
-                .accessibilityElement(children: .combine)
-            }
-
-            Button("finish setup") {
-                coordinator.runOnboardingAgain()
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(BrandUI.gold)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var rowDivider: some View {
         Rectangle()
             .fill(BrandUI.hairline)
@@ -246,7 +220,7 @@ struct SettingsView: View {
                 onShowHistory: { selectedSection = .history }
             )
         case .dictation:
-            ScrollView { dictationTab }
+            dictationTab
         case .listening:
             ScrollView {
                 OrbPickerRow(settings: settings)
@@ -270,81 +244,72 @@ struct SettingsView: View {
     }
 
     private var dictationTab: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            // only when something is actually wrong: three permanent green
-            // ticks would teach you to stop reading it. it lives on the
-            // pane you land on, because a broken permission outranks
-            // whatever you came for.
-            if !setupIssues.isEmpty {
-                setupBanner
-                rowDivider
+        Form {
+            Section("Dictation key") {
+                hotkeyRow
             }
 
-            hotkeyRow
-            rowDivider
-            DictationOptionRow(
-                option: .preRoll,
-                settings: settings
-            )
-            rowDivider
-            DictationOptionRow(
-                option: .soundFeedback,
-                settings: settings
-            )
-            rowDivider
-            PipelineView(coordinator: coordinator, settings: settings)
-            rowDivider
-            engineEditor
+            Section("Behavior") {
+                DictationOptionRow(option: .preRoll, settings: settings)
+                DictationOptionRow(option: .soundFeedback, settings: settings)
+            }
+
+            Section("Cleanup") {
+                PipelineView(coordinator: coordinator, settings: settings)
+                    .padding(.vertical, 4)
+            }
+
+            Section {
+                // the picker is the list (ADR 0039): the tradeoff is the
+                // decision, so it goes on the control.
+                ModelChooserView(
+                    selection: $settings.dictationModel,
+                    active: coordinator.activeDictationModel,
+                    preparation: coordinator.enginePreparationState,
+                    installed: installedModels,
+                    onRetry: { coordinator.retryEnginePrewarm() }
+                )
+            } header: {
+                Text("Speech model")
+            } footer: {
+                modelFooter
+            }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
-        .padding(.bottom, 20)
+        .formStyle(.grouped)
     }
 
     private var hotkeyRow: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // hold, double-tap lock and esc all ship; until this line, the
-            // only way to find them was to do one by accident.
-            SettingsRowLabel(
-                "key",
-                explanation: HotkeyBinding.gestureExplanation
-            )
-
-            Spacer(minLength: 8)
-
-            // the chip is the control — it and a picker beside it showed the
-            // same value twice.
-            Menu {
-                ForEach(HotkeyBinding.supported) { binding in
-                    Button(binding.displayName) {
-                        _ = coordinator.rebindHotkey(to: binding)
-                    }
+        // hold, double-tap lock and esc all ship; until this line, the
+        // only way to find them was to do one by accident.
+        Picker(selection: Binding(
+            get: { settings.dictationHotkey },
+            set: { _ = coordinator.rebindHotkey(to: $0) }
+        )) {
+            ForEach(HotkeyBinding.supported) { binding in
+                Text(binding.displayName.capitalizedFirst)
+                    .tag(binding)
                     // a modifier the meeting shortcut holds would start a
                     // take every time the shortcut is pressed.
-                    .disabled(
+                    .selectionDisabled(
                         settings.meetingShortcut?
                             .refusal(againstDictationKey: binding) != nil)
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    KeyChip(
-                        settings.dictationHotkey.displayName,
-                        isActive: keyChipLit
-                    )
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(BrandUI.textSecondary)
-                }
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .fixedSize()
-            .accessibilityLabel("dictation key")
-            .accessibilityHint(HotkeyBinding.gestureExplanation)
+        } label: {
+            HStack(spacing: 6) {
+                Text("Key")
+                // the same press setup listens to: hold the key with this
+                // pane open and the light answers, so "i hold fn and
+                // nothing happens" is a five-second self-diagnosis.
+                Circle()
+                    .fill(keyChipLit ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+                    .frame(width: 7, height: 7)
+                    .help("Lights up while you press the key")
+                    .accessibilityHidden(true)
+            }
+            Text(HotkeyBinding.gestureExplanation.capitalizedFirst)
         }
-        // the same press setup listens to. hold the key with this pane open
-        // and the chip answers, so "i hold fn and nothing happens" is a
-        // five-second self-diagnosis instead of a support thread.
+        .pickerStyle(.menu)
+        .accessibilityLabel("Dictation key")
         .task(id: coordinator.hotkeyDetection) {
             guard coordinator.hotkeyDetection != nil else {
                 return
@@ -353,86 +318,44 @@ struct SettingsView: View {
             do {
                 try await Task.sleep(for: .milliseconds(250))
             } catch {
-                // a press that lands mid-pulse owns the chip from here.
+                // a press that lands mid-pulse owns the light from here.
                 return
             }
             keyChipLit = false
         }
     }
 
-    private var engineEditor: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("speech model")
-                    .font(BrandUI.bodyFont.weight(.medium))
-
-                Spacer(minLength: 12)
-
-                Text("what turns your voice into words. on this mac, always.")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-            }
-
-            // the picker is the list (ADR 0039): the tradeoff is the
-            // decision, so it goes on the control.
-            ModelChooserView(
-                selection: $settings.dictationModel,
-                active: coordinator.activeDictationModel,
-                preparation: coordinator.enginePreparationState,
-                installed: installedModels,
-                onRetry: { coordinator.retryEnginePrewarm() }
-            )
-
-            // storage is one quiet line, not a button per row.
-            HStack(spacing: 12) {
-                Text("one download serves dictation and meetings.")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-
+    /// storage, removal and what the model is doing, under the choice.
+    private var modelFooter: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("One download serves dictation and meetings.")
                 Spacer(minLength: 8)
-
-                Button("show in finder") {
+                Button("Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting(
                         [AppIdentity.sharedModelDirectory]
                     )
                 }
-                .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
-
                 if installedModels.contains(where: \.isDownloaded) {
-                    Menu("remove a download…") {
-                        ForEach(
-                            installedModels.filter(\.isDownloaded)
-                        ) { model in
-                            Button(
-                                "\(model.version.shortName) · "
-                                    + model.onDiskSize
-                            ) {
+                    Menu("Remove a Download…") {
+                        ForEach(installedModels.filter(\.isDownloaded)) { model in
+                            Button("\(model.version.shortName.capitalizedFirst) · \(model.onDiskSize)") {
                                 pendingModelRemoval = model.version
                             }
                         }
                     }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
                     .fixedSize()
                 }
             }
-
             if let modelStoreMessage {
-                Text(modelStoreMessage)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.gold)
+                Text(modelStoreMessage.capitalizedFirst)
+                    .foregroundStyle(.red)
             }
-
             if let message = coordinator.engineSwitchMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.gold)
+                Text(message.capitalizedFirst)
             }
         }
+        .foregroundStyle(.secondary)
     }
 
     // MARK: - dictionary

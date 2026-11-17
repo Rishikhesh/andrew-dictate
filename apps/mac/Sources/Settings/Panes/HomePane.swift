@@ -133,8 +133,30 @@ struct HomePane: View {
 }
 
 extension String {
-    /// the app's lowercase copy, as macOS writes a sentence.
+    /// the app's lowercase copy, as macOS writes it: every sentence starts
+    /// with a capital. "fn" is a key's name and stays as it is.
     var capitalizedFirst: String {
-        prefix(1).uppercased() + dropFirst()
+        guard self != "fn" else {
+            return self
+        }
+        var out = ""
+        var capitalizeNext = true
+        var previous: Character = " "
+        for character in self {
+            if capitalizeNext, character.isLetter {
+                out += String(character).uppercased()
+                capitalizeNext = false
+            } else {
+                out.append(character)
+                if character.isLetter || character.isNumber {
+                    capitalizeNext = false
+                }
+            }
+            if character == " ", [".", "?", "!"].contains(previous) {
+                capitalizeNext = true
+            }
+            previous = character
+        }
+        return out
     }
 }

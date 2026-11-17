@@ -48,10 +48,8 @@ struct ModelChooserView: View {
             choose: { selection = version }
         ) {
             if isChosen, preparation == .failed {
-                Button("retry", action: onRetry)
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.gold)
+                Button("Retry", action: onRetry)
+                    .controlSize(.small)
                     .padding(.top, 2)
             }
         }

@@ -23,20 +23,15 @@ struct PipelineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("cleanup")
-                    .font(BrandUI.bodyFont.weight(.medium))
-
-                Spacer(minLength: 8)
-
-                Text(
-                    coordinator.lastHeard == nil
-                        ? "a sample, until you dictate something."
-                        : "your last dictation."
-                )
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
-            }
+            // the section above is titled cleanup; this only says what the
+            // three columns are showing.
+            Text(
+                coordinator.lastHeard == nil
+                    ? "A sample, until you dictate something."
+                    : "Your last dictation."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 0) {
                 stage("heard", lit: true) {
@@ -48,17 +43,17 @@ struct PipelineView: View {
                 stage("cleanup", lit: settings.cleanupEnabled) {
                     Toggle("", isOn: $settings.cleanupEnabled)
                         .labelsHidden()
-                        .brandToggleStyle()
+                        .toggleStyle(.switch)
                         .controlSize(.mini)
                         .accessibilityLabel("cleanup")
 
                     if settings.cleanupEnabled {
-                        Text("on. spoken punctuation, emails, links, numbers, capitals.")
-                            .foregroundStyle(BrandUI.textSecondary)
+                        Text("On. Spoken punctuation, emails, links, numbers, capitals.")
+                            .foregroundStyle(.secondary)
                         flowText(diffText(heardText, cleanedText))
                     } else {
-                        Text("off. only your dictionary still applies.")
-                            .foregroundStyle(BrandUI.textSecondary)
+                        Text("Off. Only your dictionary still applies.")
+                            .foregroundStyle(.secondary)
                         if cleanedText != heardText {
                             flowText(diffText(heardText, cleanedText))
                         }
@@ -75,9 +70,9 @@ struct PipelineView: View {
             // the markers are the only way to say a line break, and nothing
             // on screen named them until now. dimmed when the switch is off,
             // because then they genuinely do nothing.
-            Text(PipelineSample.spokenMarkerLine)
+            Text(PipelineSample.spokenMarkerLine.capitalizedFirst)
                 .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .opacity(settings.cleanupEnabled ? 1 : 0.6)
         }
@@ -100,7 +95,7 @@ struct PipelineView: View {
     private var arrow: some View {
         Image(systemName: "arrow.right")
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(BrandUI.gold.opacity(0.55))
+            .foregroundStyle(.tertiary)
             .frame(width: 22)
             .padding(.top, 2)
             .accessibilityHidden(true)
@@ -112,12 +107,12 @@ struct PipelineView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(lit ? BrandUI.gold : BrandUI.textSecondary)
+            Text(title.capitalizedFirst)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
             content()
         }
-        .font(.system(size: 11))
+        .font(.callout)
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(lit ? 1 : 0.6)
     }
@@ -145,7 +140,7 @@ struct PipelineView: View {
 
     private func plain(_ text: String) -> AttributedString {
         var out = AttributedString(text)
-        out.mergeAttributes(Self.ink(BrandUI.textPrimary))
+        out.mergeAttributes(Self.ink(.primary))
         return out
     }
 
@@ -156,15 +151,15 @@ struct PipelineView: View {
             var piece = AttributedString(index == 0 ? token.text : " " + token.text)
             switch token.change {
             case .same:
-                piece.mergeAttributes(Self.ink(BrandUI.textPrimary))
+                piece.mergeAttributes(Self.ink(.primary))
             case .added:
-                var container = Self.ink(BrandUI.goldPale)
+                var container = Self.ink(.primary)
                 container[
                     AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self
-                ] = BrandUI.gold.opacity(0.18)
+                ] = SystemAccent.color.opacity(0.25)
                 piece.mergeAttributes(container)
             case .removed:
-                var container = Self.ink(BrandUI.attention.opacity(0.85))
+                var container = Self.ink(Color.red.opacity(0.85))
                 container[
                     AttributeScopes.SwiftUIAttributes.StrikethroughStyleAttribute.self
                 ] = .single
