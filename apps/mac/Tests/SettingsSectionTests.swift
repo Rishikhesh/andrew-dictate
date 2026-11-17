@@ -67,5 +67,7 @@ final class SentenceCaseTests: XCTestCase {
         XCTAssertEqual("an ai rewrites it".capitalizedFirst, "An AI rewrites it")
         XCTAssertEqual("a key from platform.openai.com".capitalizedFirst, "A key from platform.openai.com")
         XCTAssertEqual("the machine said maybe".capitalizedFirst, "The machine said maybe")
+        XCTAssertEqual("fast · english and european languages only".capitalizedFirst, "Fast · English and European languages only")
+        XCTAssertEqual("~2.9 gb · 464.5 mb".capitalizedFirst, "~2.9 GB · 464.5 MB")
     }
 }

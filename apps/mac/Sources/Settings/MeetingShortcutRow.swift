@@ -15,7 +15,7 @@ struct MeetingShortcutRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 SettingsRowLabel(
                     "meeting shortcut",
                     explanation: "starts a meeting, and stops the one that records. needs ⌃ or ⌘."
@@ -23,26 +23,33 @@ struct MeetingShortcutRow: View {
 
                 Spacer(minLength: 8)
 
+                // a recorder: click, then press the keys. it reads as a
+                // field while it listens, so the next key press has a home.
                 Button(action: toggleListening) {
-                    KeyChip(chipText, isActive: isListening)
+                    Text(chipText.capitalizedFirst)
+                        .monospacedDigit()
+                        .frame(minWidth: 110)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("meeting shortcut")
+                .buttonStyle(.bordered)
+                .overlay {
+                    if isListening {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(.tint, lineWidth: 2)
+                    }
+                }
+                .accessibilityLabel("Meeting shortcut")
                 .accessibilityValue(chipText)
-                .accessibilityHint("press to choose a new one")
+                .accessibilityHint("Press to choose a new one")
 
                 if settings.meetingShortcut != nil {
-                    Button("clear", action: clear)
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
+                    Button("Clear", action: clear)
                 }
             }
 
             if let note {
-                Text(note)
+                Text(note.capitalizedFirst)
                     .font(.caption)
-                    .foregroundStyle(BrandUI.attention)
+                    .foregroundStyle(.red)
             }
         }
         // the app going to the background ends it: no key would reach the

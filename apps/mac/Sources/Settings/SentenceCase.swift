@@ -43,6 +43,10 @@ extension String {
         ("ai", "AI"),
         ("api", "API"),
         ("json", "JSON"),
+        ("english", "English"),
+        ("european", "European"),
+        ("gb", "GB"),
+        ("mb", "MB"),
     ]
 
     private static func properNames(in text: String) -> String {

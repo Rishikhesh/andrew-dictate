@@ -230,7 +230,7 @@ struct SettingsView: View {
                 dictationKey: settings.dictationHotkey
             )
         case .meetings:
-            ScrollView { meetingsTab }
+            meetingsTab
         case .dictionary:
             dictionaryTab
         case .history:
@@ -554,177 +554,114 @@ struct SettingsView: View {
     // MARK: - meetings
 
     private var meetingsTab: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            meetingModelEditor
-            rowDivider
-            MeetingShortcutRow(settings: settings, coordinator: coordinator)
-            rowDivider
-            meetingsFolderRow
-            rowDivider
-            meetingAudioRow
-            rowDivider
-            meetingHookRow
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
-        .padding(.bottom, 20)
-    }
-
-    /// the same cards dictation uses — each job picks its own model, and the
-    /// card states the consequence (ADR 0040).
-    private var meetingModelEditor: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("meeting model")
-                    .font(BrandUI.bodyFont.weight(.medium))
-
-                Spacer(minLength: 12)
-
-                Text("what listens in meetings. on this mac, always.")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
+        Form {
+            Section {
+                // the same rows dictation uses: each job picks its own
+                // model, and the row states the consequence (ADR 0040).
+                MeetingModelChooserView(
+                    selection: $settings.meetingModel,
+                    installed: coordinator.installedMeetingModels,
+                    downloading: coordinator.meetingModelDownloads
+                )
+            } header: {
+                Text("Meeting model")
+            } footer: {
+                Text("What listens in meetings. On this Mac, always.")
             }
 
-            MeetingModelChooserView(
-                selection: $settings.meetingModel,
-                installed: coordinator.installedMeetingModels,
-                downloading: coordinator.meetingModelDownloads
-            )
+            Section("Recording") {
+                MeetingShortcutRow(settings: settings, coordinator: coordinator)
+
+                // ADR 0048: the audio waits a while after the transcript, so
+                // a file that looks wrong can be checked or read again, then
+                // goes by itself. read when a meeting starts.
+                Picker(selection: $settings.keepMeetingAudio) {
+                    ForEach(KeepMeetingAudio.allCases) { choice in
+                        Text(choice.label.capitalizedFirst).tag(choice)
+                    }
+                } label: {
+                    Text("Keep meeting audio")
+                    Text(settings.keepMeetingAudio.caption.capitalizedFirst)
+                }
+                .pickerStyle(.menu)
+            }
+
+            Section("Saving") {
+                meetingsFolderRow
+                meetingHookRow
+            }
         }
+        .formStyle(.grouped)
     }
 
     private var meetingsFolderRow: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("save meetings in")
-                    .font(BrandUI.bodyFont.weight(.medium))
-
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Save meetings in")
                 Text(tildePath(settings.meetingsFolder))
-                    .font(BrandUI.machineFont(size: 12))
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
-
                 // the other thing the app cannot do for you: a folder that
                 // syncs uploads other people's words, and nothing here can
                 // stop it. saying so beats letting it happen quietly.
                 if AppSettings.syncsToICloud(settings.meetingsFolder) {
-                    Text("this folder syncs to icloud — meetings will leave the mac.")
+                    Text("This folder syncs to iCloud, so meetings will leave this Mac.")
                         .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .foregroundStyle(.orange)
                 }
             }
-
             Spacer(minLength: 8)
-
-            Button("change…", action: chooseMeetingsFolder)
-
-            Button("show in finder") {
+            Button("Show in Finder") {
                 showInFinder(settings.meetingsFolder)
             }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundStyle(BrandUI.textSecondary)
-        }
-    }
-
-    /// ADR 0048: the audio waits a while after the transcript, so a file
-    /// that looks wrong can be checked or read again, then goes by itself.
-    /// read when a meeting starts, like the folder and the model.
-    private var meetingAudioRow: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("keep meeting audio")
-                    .font(BrandUI.bodyFont.weight(.medium))
-
-                Text(settings.keepMeetingAudio.caption)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 8)
-
-            Picker("keep meeting audio", selection: $settings.keepMeetingAudio) {
-                ForEach(KeepMeetingAudio.allCases) { choice in
-                    Text(choice.label).tag(choice)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .fixedSize()
+            Button("Change…", action: chooseMeetingsFolder)
         }
     }
 
     private var meetingHookRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("after a meeting is saved, run")
-                        .font(BrandUI.bodyFont.weight(.medium))
-
-                    Text(settings.meetingHook.map(tildePath) ?? "nothing")
-                        .font(BrandUI.machineFont(size: 12))
-                        .foregroundStyle(BrandUI.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .textSelection(.enabled)
-                }
-
-                Spacer(minLength: 8)
-
-                Button("choose…", action: chooseMeetingHook)
-
-                if settings.meetingHook != nil {
-                    Button("clear") {
-                        settings.meetingHook = nil
-                        settings.meetingHookLastRunAt = nil
-                        settings.meetingHookLastRunLabel = nil
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("After a meeting is saved, run")
+                Text(settings.meetingHook.map(tildePath) ?? "Nothing")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                // a hook that failed silently is a hook nobody can fix, so
+                // the last run stays on the row until the next replaces it.
+                if let ranAt = settings.meetingHookLastRunAt {
+                    HStack(spacing: 6) {
+                        Text(
+                            "Last run: "
+                                + ranAt.formatted(.relative(presentation: .named))
+                                + " · "
+                                + (settings.meetingHookLastRunLabel ?? "ok")
+                        )
+                        .foregroundStyle(hookFailed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                        if hookFailed {
+                            Button("Open Log", action: openHooksLog)
+                                .buttonStyle(.link)
+                        }
                     }
-                    .buttonStyle(.plain)
                     .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
+                }
+                Text("Gets the transcript path as $1 and the same details as JSON on stdin.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            if settings.meetingHook != nil {
+                Button("Clear") {
+                    settings.meetingHook = nil
+                    settings.meetingHookLastRunAt = nil
+                    settings.meetingHookLastRunLabel = nil
                 }
             }
-
-            // a hook that failed silently is a hook nobody can fix, so the
-            // last run stays on the row until the next one replaces it.
-            if let ranAt = settings.meetingHookLastRunAt {
-                HStack(spacing: 6) {
-                    Text(
-                        "last run: "
-                            + ranAt.formatted(
-                                .relative(presentation: .named)
-                            )
-                            + " · "
-                            + (settings.meetingHookLastRunLabel ?? "ok")
-                    )
-                    .font(.caption)
-                    .foregroundStyle(
-                        hookFailed ? BrandUI.attention : BrandUI.textSecondary
-                    )
-
-                    if hookFailed {
-                        Text("·")
-                            .font(.caption)
-                            .foregroundStyle(BrandUI.textSecondary)
-                            .accessibilityHidden(true)
-
-                        Button("open log", action: openHooksLog)
-                            .buttonStyle(.plain)
-                            .font(.caption)
-                            .foregroundStyle(BrandUI.gold)
-                    }
-                }
-            }
-
-            Text(
-                "gets the transcript path as $1 and the same details as "
-                    + "json on stdin."
-            )
-            .font(.caption)
-            .foregroundStyle(BrandUI.textSecondary)
+            Button("Choose…", action: chooseMeetingHook)
         }
     }
 
@@ -737,8 +674,8 @@ struct SettingsView: View {
 
     private func chooseMeetingsFolder() {
         let panel = NSOpenPanel()
-        panel.title = "save meetings in"
-        panel.prompt = "choose"
+        panel.title = "Save Meetings In"
+        panel.prompt = "Choose"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
@@ -756,8 +693,8 @@ struct SettingsView: View {
     /// about someone else's toolchain.
     private func chooseMeetingHook() {
         let panel = NSOpenPanel()
-        panel.title = "after a meeting is saved, run"
-        panel.prompt = "choose"
+        panel.title = "After a Meeting Is Saved, Run"
+        panel.prompt = "Choose"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
