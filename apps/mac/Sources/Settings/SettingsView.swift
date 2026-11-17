@@ -229,9 +229,22 @@ struct SettingsView: View {
     private func detail(for section: SettingsSection) -> some View {
         switch section {
         case .home:
-            Text("Home")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HomePane(
+                stats: DashboardStats.make(
+                    dictations: browser.items,
+                    totalWords: settings.totalWordsDictated,
+                    typicalPaste: timings?.keyUpToCompletion?.p50,
+                    slowestPaste: timings?.keyUpToCompletion?.p95,
+                    pasteSample: timings?.sampleSize ?? 0,
+                    keepsDictations: settings.keepDictations,
+                    now: .now,
+                    calendar: .current
+                ),
+                issues: setupIssues,
+                modelLine: "Dictation: \(settings.dictationModel.shortName.capitalizedFirst) · Meetings: \(settings.meetingModel.shortName.capitalizedFirst)",
+                onFinishSetup: { coordinator.runOnboardingAgain() },
+                onShowHistory: { selectedSection = .history }
+            )
         case .dictation:
             ScrollView { dictationTab }
         case .listening:

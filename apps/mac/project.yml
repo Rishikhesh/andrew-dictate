@@ -192,6 +192,7 @@ targets:
       - Sources/Settings/AppSettings.swift
       - Sources/Settings/SettingsSection.swift
       - Sources/Settings/SystemAccent.swift
+      - Sources/Settings/DashboardStats.swift
       - Sources/HUD/ListeningOrb.swift
       - Sources/HUD/OrbMotion.swift
       - Sources/Audio/PitchEstimator.swift
