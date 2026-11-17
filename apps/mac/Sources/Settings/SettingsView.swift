@@ -33,6 +33,7 @@ struct SettingsView: View {
     @State private var timings: TimelineSummary?
     /// lit for a quarter second every time the bound key is pressed.
     @State private var keyChipLit = false
+    @FocusState private var searchFocused: Bool
 
     /// `meetingsLoader` is left open on purpose: this pane knows how to draw
     /// the meetings folder, not where it is or how to read it.
@@ -117,7 +118,19 @@ struct SettingsView: View {
                 meetings.reload()
             }
         }
+        // home's numbers follow you while the window stays open: a new take
+        // lands in the archive and the timings.
+        .onChange(of: coordinator.lastHeard) {
+            if selectedSection == .home {
+                browser.reload()
+                timings = coordinator.timingsSummary()
+            }
+        }
         .onChange(of: selectedSection) { _, tab in
+            if tab == .home {
+                browser.reload()
+                timings = coordinator.timingsSummary()
+            }
             if tab == .history {
                 browser.reload()
                 meetings.reload()
@@ -273,16 +286,22 @@ struct SettingsView: View {
         // only way to find them was to do one by accident.
         Picker(selection: Binding(
             get: { settings.dictationHotkey },
-            set: { _ = coordinator.rebindHotkey(to: $0) }
+            set: { key in
+                // never a key the meeting shortcut holds, whatever the menu
+                // let through: every shortcut press would start a take.
+                guard DictationKeyGuard.canBind(key, meetingShortcut: settings.meetingShortcut) else {
+                    return
+                }
+                _ = coordinator.rebindHotkey(to: key)
+            }
         )) {
             ForEach(HotkeyBinding.supported) { binding in
                 Text(binding.displayName.capitalizedFirst)
                     .tag(binding)
                     // a modifier the meeting shortcut holds would start a
                     // take every time the shortcut is pressed.
-                    .selectionDisabled(
-                        settings.meetingShortcut?
-                            .refusal(againstDictationKey: binding) != nil)
+                    .disabled(
+                        !DictationKeyGuard.canBind(binding, meetingShortcut: settings.meetingShortcut))
             }
         } label: {
             HStack(spacing: 6) {
@@ -338,7 +357,7 @@ struct SettingsView: View {
                 }
             }
             if let modelStoreMessage {
-                Text(modelStoreMessage.capitalizedFirst)
+                Text(modelStoreMessage)
                     .foregroundStyle(.red)
             }
             if let message = coordinator.engineSwitchMessage {
@@ -419,6 +438,16 @@ struct SettingsView: View {
             placement: .toolbar,
             prompt: historySegment == .dictations ? "Search what you said" : "Search the meetings"
         )
+        .searchFocused($searchFocused)
+        .background {
+            // there is no menu bar to hang a Find item on, so ⌘F is a
+            // button with nothing to look at.
+            Button("Find in History") { searchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
+        }
     }
 
     private var dictationsFooter: some View {

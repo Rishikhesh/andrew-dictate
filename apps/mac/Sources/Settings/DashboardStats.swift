@@ -22,6 +22,9 @@ struct DashboardStats: Equatable {
     let pasteSample: Int
     /// no kept dictation to count from, whether keeping is off or new.
     let keptNothing: Bool
+    /// why the chart is not drawn, or nil when it is: with keeping off the
+    /// days are not counted, so bars would be zeros pretending to be data.
+    let chartNote: String?
 
     static func make(
         dictations: [Dictation],
@@ -39,9 +42,10 @@ struct DashboardStats: Equatable {
             byDay[calendar.startOfDay(for: dictation.startedAt), default: 0] += words(in: dictation.inserted)
         }
         let week = (0..<7).reversed().compactMap { back -> DayWords? in
-            guard let day = calendar.date(byAdding: .day, value: -back, to: today) else {
+            guard let shifted = calendar.date(byAdding: .day, value: -back, to: today) else {
                 return nil
             }
+            let day = calendar.startOfDay(for: shifted)
             return DayWords(day: day, words: byDay[day] ?? 0, isToday: back == 0)
         }
         return DashboardStats(
@@ -52,7 +56,12 @@ struct DashboardStats: Equatable {
             typicalPaste: milliseconds(typicalPaste),
             slowestPaste: milliseconds(slowestPaste),
             pasteSample: pasteSample,
-            keptNothing: dictations.isEmpty
+            keptNothing: dictations.isEmpty,
+            chartNote: !keepsDictations
+                ? "Turn on Keep new dictations in History to see your days here."
+                : dictations.isEmpty
+                    ? "Nothing kept yet. Your days show up here as you dictate."
+                    : nil
         )
     }
 

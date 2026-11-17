@@ -67,6 +67,14 @@ final class DashboardStatsTests: XCTestCase {
         XCTAssertEqual(stats.pasteSample, 312)
     }
 
+    // final review: the chart never draws zeros as if they were real.
+    func testTheChartSaysWhyItIsEmpty() {
+        XCTAssertEqual(make([], keeps: false).chartNote, "Turn on Keep new dictations in History to see your days here.")
+        XCTAssertEqual(make([dictation("old", daysAgo: 2)], keeps: false).chartNote, "Turn on Keep new dictations in History to see your days here.")
+        XCTAssertEqual(make([], keeps: true).chartNote, "Nothing kept yet. Your days show up here as you dictate.")
+        XCTAssertNil(make([dictation("x", daysAgo: 0)], keeps: true).chartNote)
+    }
+
     func testNothingKeptSaysSo() {
         let stats = make([], keeps: false)
         XCTAssertNil(stats.todayWords)
@@ -76,10 +84,9 @@ final class DashboardStatsTests: XCTestCase {
     }
 
     func testDaysFollowTheLocalCalendar() {
-        // 23:50 local yesterday is yesterday here, though in UTC it is the
-        // same day as this afternoon.
-        let stats = make([dictation("late night", daysAgo: 1, hour: 23, minute: 50), dictation("now", daysAgo: 0)])
-        XCTAssertEqual(stats.todayWords, 1)
+        // 00:10 local today is 18:40 UTC yesterday: it counts as today here.
+        let stats = make([dictation("just after midnight", daysAgo: 0, hour: 0, minute: 10), dictation("late night", daysAgo: 1, hour: 23, minute: 50)])
+        XCTAssertEqual(stats.todayWords, 3)
         XCTAssertEqual(stats.lastSevenDays[5].words, 2)
     }
 }

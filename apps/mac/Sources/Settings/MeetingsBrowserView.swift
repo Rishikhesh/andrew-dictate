@@ -90,7 +90,7 @@ struct MeetingsBrowserView: View {
             }
             Button("Cancel", role: .cancel) { pendingDelete = nil }
         } message: { _ in
-            Text("The transcript and any kept audio are deleted. This can’t be undone.")
+            Text("The transcript moves to the Trash. Any kept audio is deleted.")
         }
     }
 

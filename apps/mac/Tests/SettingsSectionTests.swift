@@ -70,4 +70,21 @@ final class SentenceCaseTests: XCTestCase {
         XCTAssertEqual("fast · english and european languages only".capitalizedFirst, "Fast · English and European languages only")
         XCTAssertEqual("~2.9 gb · 464.5 mb".capitalizedFirst, "~2.9 GB · 464.5 MB")
     }
+
+    // final review: a symbol starts the sentence too, so "⌥ is…" stays.
+    func testASymbolStartsTheSentence() {
+        XCTAssertEqual("⌥ is your dictation key's own.".capitalizedFirst, "⌥ is your dictation key's own.")
+        XCTAssertEqual("~2.9 gb".capitalizedFirst, "~2.9 GB")
+    }
+}
+
+/// final review: the dictation key can never be set to one the meeting
+/// shortcut already holds, whatever the menu lets through.
+final class DictationKeyGuardTests: XCTestCase {
+    func testAKeyTheMeetingShortcutHoldsIsRefused() {
+        let shortcut = MeetingShortcut(keyCode: 46, modifiers: [.control, .command], keyName: "M")
+        XCTAssertFalse(DictationKeyGuard.canBind(.leftControl, meetingShortcut: shortcut))
+        XCTAssertTrue(DictationKeyGuard.canBind(.fn, meetingShortcut: shortcut))
+        XCTAssertTrue(DictationKeyGuard.canBind(.leftControl, meetingShortcut: nil))
+    }
 }

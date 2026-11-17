@@ -50,8 +50,8 @@ struct HomePane: View {
             }
 
             Section("Last 7 days") {
-                if stats.keptNothing {
-                    Text("Turn on Keep new dictations in History to see your days here.")
+                if let note = stats.chartNote {
+                    Text(note)
                         .foregroundStyle(.secondary)
                 } else {
                     Chart(stats.lastSevenDays, id: \.day) { day in

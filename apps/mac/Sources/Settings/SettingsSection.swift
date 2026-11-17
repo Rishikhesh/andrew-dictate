@@ -71,3 +71,12 @@ struct SettingsSectionLabel: View {
         }
     }
 }
+
+/// the dictation key may never be one the meeting shortcut holds: every
+/// press of the shortcut would start a take too. checked where the key is
+/// set, so no menu can let it through.
+enum DictationKeyGuard {
+    static func canBind(_ key: HotkeyBinding, meetingShortcut: MeetingShortcut?) -> Bool {
+        meetingShortcut?.refusal(againstDictationKey: key) == nil
+    }
+}

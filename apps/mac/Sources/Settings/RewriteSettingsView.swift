@@ -366,7 +366,7 @@ struct RewriteSettingsView: View {
                 .accessibilityLabel("key \(key)")
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(style.name.capitalizedFirst)
+                    Text(style.name)
                     if isDefault {
                         Text("Default")
                             .font(.caption2.weight(.semibold))
@@ -376,7 +376,7 @@ struct RewriteSettingsView: View {
                             .background(Capsule().fill(.tint.opacity(0.15)))
                     }
                 }
-                Text(summary(of: style).capitalizedFirst)
+                Text(summary(of: style))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -435,8 +435,10 @@ struct RewriteSettingsView: View {
     }
 
     private func summary(of style: RewriteStyle) -> String {
-        let tone = style.tone.map(\.summary)
-            ?? "fits it to what you said"
+        // the tone is the app's words, so it reads in sentence case; the
+        // notes are yours and are shown as you typed them.
+        let tone = (style.tone.map(\.summary)
+            ?? "fits it to what you said").capitalizedFirst
         let notes = style.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         return notes.isEmpty ? tone : "\(tone) · \(notes)"
     }

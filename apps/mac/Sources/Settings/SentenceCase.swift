@@ -16,7 +16,9 @@ extension String {
                 capitalizeNext = false
             } else {
                 out.append(character)
-                if character.isLetter || character.isNumber {
+                // a symbol or a digit starts the sentence as much as a
+                // letter does: "⌥ is your key" is not "⌥ Is your key".
+                if !character.isWhitespace {
                     capitalizeNext = false
                 }
             }
