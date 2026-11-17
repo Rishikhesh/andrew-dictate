@@ -79,11 +79,51 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsSection.allCases, selection: $selectedSection) { section in
-                SettingsSectionLabel(section: section)
-                    .badge(section == .home ? setupIssues.count : 0)
-                    .tag(section)
+            // the selection is drawn here, in the Mac's accent: the list's
+            // own highlight takes the app's gold accent, which settings
+            // does not wear. arrow keys still move it.
+            List {
+                ForEach(SettingsSection.allCases) { section in
+                    let selected = section == selectedSection
+                    Button {
+                        selectedSection = section
+                    } label: {
+                        HStack {
+                            SettingsSectionLabel(section: section)
+                            Spacer(minLength: 4)
+                            if section == .home, !setupIssues.isEmpty {
+                                Text("\(setupIssues.count)")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 1)
+                                    .background(Capsule().fill(.red))
+                            }
+                        }
+                        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(selected ? SystemAccent.color : .clear)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                    .listRowSeparator(.hidden)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
             }
+            .listStyle(.sidebar)
+            .focusable()
+            // the highlight already says where you are; a focus ring in the
+            // app's gold around the whole sidebar would say it twice.
+            .focusEffectDisabled()
+            .onKeyPress(.downArrow) { step(1) }
+            .onKeyPress(.upArrow) { step(-1) }
+            .toolbar(removing: .sidebarToggle)
             .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
         } detail: {
             detail(for: selectedSection)
@@ -202,6 +242,17 @@ struct SettingsView: View {
 
 
     // MARK: - dictation
+
+    /// the arrow keys walk the sidebar, as they do in System Settings.
+    private func step(_ by: Int) -> KeyPress.Result {
+        let all = SettingsSection.allCases
+        guard let index = all.firstIndex(of: selectedSection) else {
+            return .ignored
+        }
+        let next = min(max(index + by, 0), all.count - 1)
+        selectedSection = all[next]
+        return .handled
+    }
 
     /// one section at a time. panes that are not yet their own grouped
     /// form still scroll, so nothing long is ever cut off.

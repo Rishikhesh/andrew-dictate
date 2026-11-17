@@ -152,6 +152,9 @@ struct AndrewDictateApp: App {
             )
         }
         .windowResizability(.contentSize)
+        // a compact toolbar: the title in the bar, no tall empty strip
+        // between it and the first section.
+        .windowToolbarStyle(.unifiedCompact(showsTitle: true))
     }
 }
 
