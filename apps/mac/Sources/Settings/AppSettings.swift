@@ -96,6 +96,7 @@ final class AppSettings: ObservableObject {
                 return
             }
             userDefaults.setHotkeyBinding(dictationHotkey)
+            settleFixAWordDefault()
         }
     }
 
@@ -186,8 +187,20 @@ final class AppSettings: ObservableObject {
             } else {
                 userDefaults.removeObject(forKey: Self.meetingShortcutKey)
             }
+            settleFixAWordDefault()
         }
     }
+
+    /// the global shortcut that opens fix a word on the last dictation, or
+    /// nil. ⌃⌥F until somebody changes or clears it. the default never
+    /// stands in anyone's way: while the dictation key or the meeting
+    /// shortcut would clash with it, it steps aside, and comes back when
+    /// they move.
+    @Published private(set) var fixAWordShortcut: MeetingShortcut?
+
+    /// nothing chosen yet: `fixAWordShortcut` is the default, or nil while
+    /// the default steps aside.
+    @Published private(set) var fixAWordShortcutIsDefault = true
 
     /// the parent folder meetings are written under; the app makes
     /// `meetings/<year-month>/` inside it. a real folder you can open in
@@ -386,6 +399,8 @@ final class AppSettings: ObservableObject {
     private static let meetingsSetUpKey = "AndrewDictate.meetingsSetUp"
     private static let meetingModelKey = "AndrewDictate.meetingModel"
     private static let meetingShortcutKey = "AndrewDictate.meetingShortcut"
+    /// absent: the default. empty: cleared. otherwise the chosen one.
+    private static let fixAWordShortcutKey = "AndrewDictate.fixAWordShortcut"
     private static let meetingsFolderKey = "AndrewDictate.meetingsFolder"
     private static let meetingHookKey = "AndrewDictate.meetingHook"
     private static let keepMeetingAudioKey = "AndrewDictate.keepMeetingAudio"
@@ -507,10 +522,25 @@ final class AppSettings: ObservableObject {
         // a value this build cannot read is no shortcut, never a crash; nor
         // is one it would refuse, kept from a build that took it (⌘W).
         let dictationKey = userDefaults.hotkeyBinding()
-        meetingShortcut = userDefaults
+        let storedMeetingShortcut = userDefaults
             .data(forKey: Self.meetingShortcutKey)
             .flatMap { try? JSONDecoder().decode(MeetingShortcut.self, from: $0) }
             .flatMap { $0.refusal(againstDictationKey: dictationKey) == nil ? $0 : nil }
+        meetingShortcut = storedMeetingShortcut
+        if let stored = userDefaults.data(forKey: Self.fixAWordShortcutKey) {
+            fixAWordShortcutIsDefault = false
+            // cleared, unreadable, or one this build would refuse: none.
+            fixAWordShortcut = (try? JSONDecoder().decode(MeetingShortcut.self, from: stored))
+                .flatMap { shortcut in
+                    shortcut.stepsAside(
+                        forDictationKey: dictationKey, meetingShortcut: storedMeetingShortcut)
+                        ? nil : shortcut
+                }
+        } else {
+            fixAWordShortcut = MeetingShortcut.fixAWordDefault.stepsAside(
+                forDictationKey: dictationKey, meetingShortcut: storedMeetingShortcut)
+                ? nil : MeetingShortcut.fixAWordDefault
+        }
         let pickedMeetingsFolder = userDefaults
             .string(forKey: Self.meetingsFolderKey)
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -555,6 +585,12 @@ final class AppSettings: ObservableObject {
         guard meetingShortcut?.refusal(againstDictationKey: binding) == nil else {
             return false
         }
+        // a chosen fix a word shortcut holds its ground the same way; the
+        // default steps aside instead (`settleFixAWordDefault`).
+        if !fixAWordShortcutIsDefault,
+           fixAWordShortcut?.refusal(againstDictationKey: binding) != nil {
+            return false
+        }
 
         dictationHotkey = binding
         return true
@@ -567,8 +603,42 @@ final class AppSettings: ObservableObject {
         if let refusal = shortcut?.refusal(againstDictationKey: dictationHotkey) {
             return refusal
         }
+        if shortcut?.isSameKeys(as: fixAWordShortcut) == true {
+            return .isTheOtherShortcut("fix a word")
+        }
         meetingShortcut = shortcut
         return nil
+    }
+
+    /// nil clears it, and it stays cleared: the default does not come back.
+    /// refused, like the meeting shortcut, when the dictation key would
+    /// swallow it or the meeting shortcut already has its keys.
+    @discardableResult
+    func setFixAWordShortcut(_ shortcut: MeetingShortcut?) -> MeetingShortcut.Refusal? {
+        if let refusal = shortcut?.refusal(againstDictationKey: dictationHotkey) {
+            return refusal
+        }
+        if shortcut?.isSameKeys(as: meetingShortcut) == true {
+            return .isTheOtherShortcut("meeting")
+        }
+        fixAWordShortcutIsDefault = false
+        fixAWordShortcut = shortcut
+        let data = shortcut.flatMap { try? JSONEncoder().encode($0) } ?? Data()
+        userDefaults.set(data, forKey: Self.fixAWordShortcutKey)
+        return nil
+    }
+
+    /// the default, unless the dictation key or the meeting shortcut is on
+    /// its keys; a chosen shortcut is left as it is.
+    private func settleFixAWordDefault() {
+        guard fixAWordShortcutIsDefault else { return }
+        let fallback = MeetingShortcut.fixAWordDefault
+        let settled = fallback.stepsAside(
+            forDictationKey: dictationHotkey, meetingShortcut: meetingShortcut)
+            ? nil : fallback
+        if fixAWordShortcut != settled {
+            fixAWordShortcut = settled
+        }
     }
 
     /// "not a mistake", and it never comes back.

@@ -207,7 +207,7 @@ targets:
       - Sources/Hotkey/HotkeyBinding.swift
       - Sources/Hotkey/MeetingShortcut.swift
       # for the words a failed registration gets; no test registers one.
-      - Sources/Hotkey/MeetingHotkey.swift
+      - Sources/Hotkey/GlobalHotkey.swift
       - Sources/Hotkey/TapLockDetector.swift
       - Sources/Hotkey/TranscribingRepress.swift
       - Sources/Dictation

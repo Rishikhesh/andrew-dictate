@@ -372,14 +372,14 @@ final class HotkeyLogicTests: XCTestCase {
     /// another app holding the combination is the one failure worth naming;
     /// whatever else the system says, the row says it can't use it.
     func testARegistrationFailureSaysAnotherAppOnlyWhenOneHoldsIt() {
-        let taken = MeetingHotkey.Failure(status: -9_878)
-        let refused = MeetingHotkey.Failure(status: -9_868)
+        let taken = GlobalHotkey.Failure(status: -9_878)
+        let refused = GlobalHotkey.Failure(status: -9_868)
 
         XCTAssertEqual(taken, .alreadyRegistered)
         XCTAssertEqual(taken.message, "another app already uses that.")
         XCTAssertEqual(refused, .refused)
         XCTAssertEqual(refused.message, "can't use that one.")
-        XCTAssertEqual(MeetingHotkey.Failure(status: -50), .refused)
+        XCTAssertEqual(GlobalHotkey.Failure(status: -50), .refused)
     }
 
     /// esc is the dictation key's own cancel, heard everywhere: a shortcut
