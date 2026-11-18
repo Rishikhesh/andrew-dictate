@@ -123,6 +123,9 @@ struct SettingsSidebarIdentity: View {
                 theme: .auto,
                 displaySize: 34
             )
+            // a still frame: it is on screen the whole time settings is
+            // open, and a live one there kept the window redrawing.
+            .orbFrozenTime(1.2)
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Andrew Dictate")

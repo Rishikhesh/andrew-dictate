@@ -29,10 +29,11 @@ enum AppLook {
     }
 }
 
-/// a soft colour drifting slowly at the bottom of a window. it fades and
-/// grows into place when the window opens, eases to a new colour when its
-/// tint changes, holds still with Reduce Motion and is gone with Reduce
-/// Transparency.
+/// a soft colour at the bottom of a window. it fades and grows into place
+/// when the window opens and eases to a new colour when its tint changes;
+/// otherwise it holds still, because an endless drift made SwiftUI redraw
+/// the window every frame (~15% CPU) for a barely visible effect. gone with
+/// Reduce Transparency.
 struct BottomGlow: View {
     var tint: Color = AppLook.accent
     var size: CGFloat = 380
@@ -41,7 +42,6 @@ struct BottomGlow: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var scheme
     @State private var shown = false
-    @State private var drifted = false
 
     var body: some View {
         if !reduceTransparency {
@@ -49,7 +49,7 @@ struct BottomGlow: View {
                 .fill(AppLook.glowColor(tint))
                 .frame(width: size, height: size)
                 .blur(radius: size / 5.5)
-                .offset(x: drifted ? -40 : 50, y: size * 0.6 + (drifted ? 18 : -12))
+                .offset(x: 30, y: size * 0.6)
                 .scaleEffect(shown ? 1 : 0.8)
                 .opacity(shown ? AppLook.glowOpacity(scheme) : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -58,12 +58,12 @@ struct BottomGlow: View {
                 .accessibilityHidden(true)
                 .animation(.easeInOut(duration: 0.9), value: tint)
                 .onAppear {
+                    guard !reduceMotion else {
+                        shown = true
+                        return
+                    }
                     withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 1.4)) {
                         shown = true
-                    }
-                    guard !reduceMotion else { return }
-                    withAnimation(.easeInOut(duration: 24).repeatForever(autoreverses: true)) {
-                        drifted = true
                     }
                 }
         }
