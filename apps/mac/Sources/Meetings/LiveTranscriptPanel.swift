@@ -59,7 +59,7 @@ final class LiveTranscriptPanel: NSObject, NSWindowDelegate {
         )
         super.init()
 
-        panel.title = "live transcript"
+        panel.title = "Live transcript"
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.titlebarSeparatorStyle = .none

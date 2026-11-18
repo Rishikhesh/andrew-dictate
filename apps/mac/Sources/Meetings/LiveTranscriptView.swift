@@ -24,7 +24,6 @@ struct LiveTranscriptView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-                .overlay(BrandUI.hairline)
             transcript
         }
         .frame(
@@ -32,15 +31,19 @@ struct LiveTranscriptView: View {
             maxHeight: .infinity,
             alignment: .topLeading
         )
-        .preferredColorScheme(.dark)
-        .brandGlassWindow()
+        // the Mac's own Light or Dark, on glass; a panel this small has no
+        // room for a glow.
+        .glassWindow(glow: nil)
     }
 
     private var header: some View {
-        Text("recording · \(clock)")
-            .font(BrandUI.machineFont(size: 11))
-            .foregroundStyle(BrandUI.textSecondary)
-            .lineLimit(1)
+        HStack(spacing: 6) {
+            PulsingRecordDot(size: 7)
+            Text("Recording · \(clock)")
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
             // clears the close button of the transparent utility titlebar,
             // which the content is drawn underneath.
             .padding(.leading, 52)
@@ -57,9 +60,8 @@ struct LiveTranscriptView: View {
     @ViewBuilder
     private var transcript: some View {
         if model.lines.isEmpty {
-            Text("listening…")
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.textSecondary)
+            Text("Listening…")
+                .foregroundStyle(.secondary)
                 .frame(
                     maxWidth: .infinity,
                     maxHeight: .infinity,
@@ -68,7 +70,7 @@ struct LiveTranscriptView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 7) {
+                    LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(model.lines) { line in
                             row(line)
                         }
@@ -105,40 +107,39 @@ struct LiveTranscriptView: View {
 
     private func row(_ line: LiveLine) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("[\(line.at.stamp)]")
-                .font(BrandUI.machineFont(size: 10))
-                .foregroundStyle(BrandUI.textSecondary)
+            // a timestamp is data: monospaced, so the column holds still.
+            Text(line.at.stamp)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.tertiary)
 
             Text(label(line.speaker))
-                .font(BrandUI.machineFont(size: 10))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(ink(line.speaker))
-                .frame(width: 32, alignment: .leading)
+                .frame(width: 38, alignment: .leading)
 
             Text(line.text)
-                .font(BrandUI.bodyFont)
                 .foregroundStyle(
                     line.isConfirmed
-                        ? BrandUI.textPrimary
-                        : BrandUI.textSecondary
+                        ? AnyShapeStyle(.primary)
+                        : AnyShapeStyle(.secondary)
                 )
-                .opacity(line.isConfirmed ? 1 : 0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
     private func label(_ speaker: LiveLine.Speaker) -> String {
         switch speaker {
-        case .you: "you"
-        case .them: "them"
+        case .you: "You"
+        case .them: "Them"
         }
     }
 
-    /// gold is the app's "this is the other side" mark, the same gold the lamp
-    /// and the badge use; your own voice stays quiet.
-    private func ink(_ speaker: LiveLine.Speaker) -> Color {
+    /// the other side is marked in the Mac's accent; your own voice stays
+    /// quiet.
+    private func ink(_ speaker: LiveLine.Speaker) -> AnyShapeStyle {
         switch speaker {
-        case .you: BrandUI.textSecondary
-        case .them: BrandUI.gold
+        case .you: AnyShapeStyle(.secondary)
+        case .them: AnyShapeStyle(AppLook.accent)
         }
     }
 }
