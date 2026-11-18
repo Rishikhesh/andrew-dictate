@@ -1,8 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// the notes, on the left: what the model wrote, drawn in the brand's
-/// type; or the shimmering bars while it is writing; or why it could not;
+/// the notes, on the left: what the model wrote, in the system's type; or the shimmering bars while it is writing; or why it could not;
 /// or the one button that gets it going. it follows `MeetingSummaries` for
 /// this file and nothing else — the file is the truth about what exists.
 struct MeetingSummaryPane: View {
@@ -34,13 +33,13 @@ struct MeetingSummaryPane: View {
     var body: some View {
         VStack(spacing: 0) {
             MWPaneHeader(title: "summary") {
-                MWCopyButton(help: "copy the summary", isDisabled: document.summary == nil) {
+                MWCopyButton(help: "Copy the summary", isDisabled: document.summary == nil) {
                     document.summary ?? ""
                 }
             }
             ScrollView {
                 content
-                    .padding(.horizontal, MW.s16)
+                    .padding(.horizontal, MW.s24)
                     .padding(.top, MW.s8)
                     .padding(.bottom, MW.s24)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -67,9 +66,8 @@ struct MeetingSummaryPane: View {
             failedCard(reason).mwBlurFade()
         case .nothingSaid:
             MWCard {
-                Text("nobody said anything in this one, so there is nothing to write up.")
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text("Nobody said anything in this one, so there’s nothing to write up.")
+                    .foregroundStyle(.secondary)
             }
             .mwBlurFade()
         case .empty:
@@ -82,14 +80,20 @@ struct MeetingSummaryPane: View {
     private var emptyCard: some View {
         MWCard {
             VStack(alignment: .leading, spacing: MW.s12) {
-                Text("no notes yet")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(BrandUI.textPrimary)
-                Text("andrew can write up what was decided and who owes what.")
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                MWGoldButton(title: "summarize", symbol: "sparkles", action: summarize)
+                HStack(spacing: MW.s12) {
+                    IconTile(symbol: "sparkles", tint: .purple, size: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No notes yet")
+                            .font(.headline)
+                        Text("Andrew can write up what was decided and who owes what.")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Button(action: summarize) {
+                    Label("Summarize", systemImage: "sparkles")
+                }
+                .buttonStyle(.glassProminent)
                 if let hint {
                     SettingsHint(text: hint.text, link: hint.link)
                 }
@@ -102,53 +106,51 @@ struct MeetingSummaryPane: View {
     private var hint: (text: String, link: String)? {
         if case .ready = accounts.status(of: settings.provider) {
             return settings.summariesEnabled
-                ? nil : ("notes are not written when a meeting ends. turn that on in ", "settings › ai")
+                ? nil : ("Notes aren’t written when a meeting ends. Turn that on in ", "Settings › AI")
         }
-        return ("the ai is not set up yet. set a provider in ", "settings › ai")
+        return ("The AI isn’t set up yet. Choose a provider in ", "Settings › AI")
     }
 
     private func failedCard(_ reason: String) -> some View {
-        MWCard(tint: BrandUI.attention) {
+        MWCard(tint: .orange) {
             VStack(alignment: .leading, spacing: MW.s12) {
                 HStack(alignment: .firstTextBaseline, spacing: MW.s8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrandUI.attention)
-                    Text("couldn’t write the notes")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(BrandUI.textPrimary)
+                        .foregroundStyle(.orange)
+                    Text("Couldn’t write the notes")
+                        .font(.headline)
                 }
-                Text(reason)
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text(reason.capitalizedFirst)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                MWGoldButton(title: "try again", symbol: "arrow.clockwise", action: summarize)
+                Button(action: summarize) {
+                    Label("Try Again", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.glass)
             }
         }
     }
 
     /// notes that are there, and a try that did not work: the notes stay.
     private func failedBanner(_ reason: String) -> some View {
-        MWCard(tint: BrandUI.attention) {
+        MWCard(tint: .orange) {
             HStack(spacing: MW.s12) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(BrandUI.attention)
-                Text("couldn’t write them again: \(reason)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(BrandUI.textSecondary)
+                    .foregroundStyle(.orange)
+                Text("Couldn’t write them again: \(reason)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                Button("try again", action: summarize)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(BrandUI.gold)
+                Button("Try Again", action: summarize)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
             }
         }
     }
 }
 
-/// "turn it on in settings › ai", with the last words a link to settings.
+/// "Turn it on in Settings › AI", with the last words a link to settings.
 private struct SettingsHint: View {
     let text: String
     let link: String
@@ -157,22 +159,22 @@ private struct SettingsHint: View {
 
     private var attributed: AttributedString {
         var words = AttributedString(text)
-        words.paint(words.startIndex..<words.endIndex, foreground: BrandUI.textSecondary)
+        words.paint(words.startIndex..<words.endIndex, foreground: .secondary)
         var settings = AttributedString(link)
-        settings.paint(settings.startIndex..<settings.endIndex, foreground: BrandUI.gold)
+        settings.paint(settings.startIndex..<settings.endIndex, foreground: AppLook.accent)
         settings.underline(settings.startIndex..<settings.endIndex)
         return words + settings
     }
 
     var body: some View {
         Text(attributed)
-            .font(.system(size: 11))
+            .font(.callout)
             .fixedSize(horizontal: false, vertical: true)
             .onTapGesture {
                 NSApp.activate()
                 openSettings()
             }
-            .help("open settings")
+            .help("Open Settings")
             .accessibilityAddTraits(.isLink)
             // a tap is not a key: voiceover's press and a keyboard user's
             // way to the same place.
@@ -185,8 +187,8 @@ private struct SettingsHint: View {
 
 // MARK: - the notes
 
-/// the model's markdown, in the window's own type: `##` as small gold
-/// labels, points with a bullet or a box, the rest as prose. bold, italic
+/// the model's markdown, in the system's type: `#` as a title, `##` as a
+/// heading, points with a bullet or a box, the rest as prose. bold, italic
 /// and code inside a line are the line's own markdown, read per line.
 struct MeetingNotesView: View {
     let markdown: String
@@ -216,10 +218,8 @@ struct MeetingNotesView: View {
     private func row(_ block: MeetingNotesBlocks.Block) -> some View {
         switch block {
         case let .heading(level, text):
-            Text(text.lowercased())
-                .font(.system(size: level == 1 ? 14 : 12, weight: .semibold))
-                .tracking(level == 1 ? 0.2 : 0.6)
-                .foregroundStyle(level == 1 ? BrandUI.goldPale : BrandUI.gold)
+            Text(MW.capitalized(text))
+                .font(level == 1 ? .title3.weight(.semibold) : .headline)
                 .accessibilityAddTraits(.isHeader)
         case let .bullet(text, depth, checked):
             HStack(alignment: .firstTextBaseline, spacing: MW.s8) {
@@ -230,25 +230,24 @@ struct MeetingNotesView: View {
         case let .numbered(number, text, depth):
             HStack(alignment: .firstTextBaseline, spacing: MW.s8) {
                 Text("\(number).")
-                    .font(BrandUI.machineFont(size: 12))
-                    .foregroundStyle(BrandUI.gold.opacity(0.75))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
                     .frame(minWidth: 16, alignment: .trailing)
                 inline(text)
             }
             .padding(.leading, CGFloat(depth) * MW.s16)
         case let .quote(text):
             inline(text)
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
                 .padding(.leading, MW.s12)
                 .overlay(alignment: .leading) {
-                    Rectangle().fill(BrandUI.gold.opacity(0.4)).frame(width: 2)
+                    Capsule().fill(.tertiary).frame(width: 3)
                 }
         case let .paragraph(text):
             inline(text)
         case .noneNoted:
-            Text("none noted.")
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.textPrimary.opacity(0.4))
+            Text("None noted.")
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -256,21 +255,17 @@ struct MeetingNotesView: View {
     private func marker(_ checked: Bool?) -> some View {
         if let checked {
             Image(systemName: checked ? "checkmark.square.fill" : "square")
-                .font(.system(size: 13))
-                .foregroundStyle(checked ? BrandUI.gold : BrandUI.textSecondary)
+                .foregroundStyle(checked ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .frame(width: 16)
         } else {
             Text("•")
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.gold.opacity(0.75))
+                .foregroundStyle(.secondary)
                 .frame(width: 16)
         }
     }
 
     private func inline(_ text: String) -> some View {
         Text(Self.styled(text))
-            .font(BrandUI.bodyFont)
-            .foregroundStyle(BrandUI.textPrimary)
             .lineSpacing(3)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -286,8 +281,8 @@ struct MeetingNotesView: View {
         let intents = AttributeScopes.FoundationAttributes.InlinePresentationIntentAttribute.self
         for run in parsed.runs {
             if let intent = run[intents], intent.contains(.code) {
-                parsed.setFont(run.range, BrandUI.machineFont(size: 12))
-                parsed.paint(run.range, background: Color.white.opacity(0.08))
+                parsed.setFont(run.range, .system(.callout, design: .monospaced))
+                parsed.paint(run.range, background: Color.primary.opacity(0.07))
             }
         }
         return parsed

@@ -77,7 +77,11 @@ struct LampLabView: View {
         }
 
         var palette: LampPalette {
-            self == .problem ? .attention : .gold
+            switch self {
+            case .meeting: .recording
+            case .problem: .caution
+            default: .gold
+            }
         }
     }
 

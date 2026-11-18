@@ -27,23 +27,23 @@ struct MeetingsWindowView: View {
                 }
         }
         .navigationSplitViewStyle(.balanced)
-        .preferredColorScheme(.dark)
-        .tint(BrandUI.gold)
-        .brandGlassWindow()
+        // the Mac's own Light or Dark and its accent, with a green glow at
+        // the foot: green is meetings' colour, as red is a recording's.
+        .glassWindow(glow: .green)
         .frame(minWidth: 920, minHeight: 560)
         .alert(deleteTitle, isPresented: isDeleting) {
-            Button("delete", role: .destructive) { state.confirmDelete() }
-            Button("cancel", role: .cancel) { state.pendingDelete = nil }
+            Button("Delete", role: .destructive) { state.confirmDelete() }
+            Button("Cancel", role: .cancel) { state.pendingDelete = nil }
         } message: {
-            Text("the transcript goes to the trash, with its audio.")
+            Text("The transcript goes to the Trash, with its audio.")
         }
         .alert(
-            library.failure ?? "",
+            (library.failure ?? "").capitalizedFirst,
             isPresented: Binding(
                 get: { library.failure != nil },
                 set: { if !$0 { library.dismissFailure() } })
         ) {
-            Button("ok", role: .cancel) {}
+            Button("OK", role: .cancel) {}
         }
         .background {
             // ⌘W closes it, as any window.
@@ -80,24 +80,23 @@ struct MeetingsWindowView: View {
         }
     }
 
+    /// System Settings' empty pane: the icon, one sentence, the one thing
+    /// to do.
     private var emptyState: some View {
-        VStack(spacing: MW.s12) {
-            Image(systemName: "waveform.badge.mic")
-                .font(.system(size: 30, weight: .light))
-                .foregroundStyle(BrandUI.gold.opacity(0.8))
-                .padding(.bottom, MW.s8)
-                .accessibilityHidden(true)
-            Text("your meetings go here")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(BrandUI.textPrimary)
-            Text("record a call and andrew writes it up with a summary and a transcript.")
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.textSecondary)
+        VStack(spacing: MW.s16) {
+            IconTile(symbol: "waveform.badge.mic", tint: .green, size: 60)
+            Text("Record a call and Andrew writes it up, with a summary and a transcript.")
+                .font(.title3)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
-            MWGoldButton(title: "record your first meeting", symbol: "record.circle") {
+                .frame(maxWidth: 340)
+            Button {
                 state.recordNew()
+            } label: {
+                Label("Record a Meeting", systemImage: "record.circle")
             }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
             .padding(.top, MW.s8)
             .disabled(state.isBusy)
         }
@@ -114,8 +113,8 @@ struct MeetingsWindowView: View {
 
     private var deleteTitle: String {
         guard let url = state.pendingDelete, let entry = library.entry(for: url) else {
-            return "delete this meeting?"
+            return "Delete this meeting?"
         }
-        return "delete “\(entry.title)”?"
+        return "Delete “\(entry.title)”?"
     }
 }

@@ -35,7 +35,7 @@ final class MeetingsWindowState: ObservableObject {
     /// the file a meeting was last saved to, for the bar to say it is
     /// being summarized.
     @Published private(set) var lastSaved: URL?
-    /// the row that gold-flashes once: the meeting that was just saved.
+    /// the row that flashes once: the meeting that was just saved.
     @Published private(set) var flash: URL?
     @Published var target: Target = .new
     /// what the bar's title field holds, for a new meeting.

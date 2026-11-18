@@ -21,8 +21,8 @@ enum HUDWaveMotion {
 }
 
 /// the colours the lamp burns in: a pale, a middle and a deep, mixed by its
-/// brightness. gold means working; the attention colour is a meeting with a
-/// problem, and never gold (BrandUI).
+/// brightness. gold means dictation working; red is a meeting recording, the
+/// colour every Mac gives an open mic; orange is a meeting with a problem.
 struct LampPalette: Equatable, Sendable {
     let pale: [Double]
     let mid: [Double]
@@ -40,6 +40,20 @@ struct LampPalette: Equatable, Sendable {
         pale: [246, 184, 168],
         mid: BrandUI.attentionRGB,
         deep: [150, 50, 32]
+    )
+    /// the system red, either side of it a paler and a deeper: a meeting
+    /// being recorded.
+    static let recording = LampPalette(
+        pale: [255, 163, 155],
+        mid: [255, 69, 58],
+        deep: [176, 32, 24]
+    )
+    /// the system orange: a meeting recording with a problem, clearly not
+    /// the red beside it.
+    static let caution = LampPalette(
+        pale: [255, 207, 140],
+        mid: [255, 159, 10],
+        deep: [178, 95, 0]
     )
 }
 
@@ -192,7 +206,7 @@ final class HUDViewModel: ObservableObject {
     /// when it last changed: its rise and its cool-out run from here.
     @Published private(set) var meetingLightChangedAt = Date()
     /// the colour it was last lit in, so a problem goes out in red.
-    @Published private(set) var meetingPalette: LampPalette = .gold
+    @Published private(set) var meetingPalette: LampPalette = .recording
     /// which orb listens, and whether on its chip: read each time the
     /// stage draws, so a change in settings shows on the next take.
     var orbStyle: () -> (orb: ListeningOrb, background: Bool, size: OrbSizeChoice) = {
@@ -303,9 +317,9 @@ final class HUDViewModel: ObservableObject {
         meetingLightChangedAt = Date()
         switch light {
         case .ember, .steady:
-            meetingPalette = .gold
+            meetingPalette = .recording
         case .problem:
-            meetingPalette = .attention
+            meetingPalette = .caution
         case .off, .coolingOut:
             break
         }
@@ -538,15 +552,15 @@ struct HUDView: View {
         case .off:
             EmptyView()
         case .ember:
-            meetingLine(phase: .ember, palette: .gold)
+            meetingLine(phase: .ember, palette: .recording)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Starting the meeting recording")
         case .steady:
-            meetingLine(phase: .pilot, palette: .gold)
+            meetingLine(phase: .pilot, palette: .recording)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Recording a meeting")
         case .problem:
-            meetingLine(phase: .pilot, palette: .attention)
+            meetingLine(phase: .pilot, palette: .caution)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("The meeting recording has a problem")
         case .coolingOut:
