@@ -260,6 +260,7 @@ struct SettingsView: View {
                     now: .now,
                     calendar: .current
                 ),
+                orb: settings.listeningOrb,
                 issues: setupIssues,
                 modelLine: "Dictation: \(settings.dictationModel.shortName.capitalizedFirst) · Meetings: \(settings.meetingModel.shortName.capitalizedFirst)",
                 onFinishSetup: { coordinator.runOnboardingAgain() },
