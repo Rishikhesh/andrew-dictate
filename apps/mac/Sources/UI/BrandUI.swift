@@ -191,7 +191,7 @@ private struct BrandGlassWindow: ViewModifier {
     }
 }
 
-private struct WindowTransparency: NSViewRepresentable {
+struct WindowTransparency: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         TransparencyView()
     }
