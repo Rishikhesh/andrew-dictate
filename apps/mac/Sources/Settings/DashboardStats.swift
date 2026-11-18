@@ -13,6 +13,8 @@ struct DashboardStats: Equatable {
     let totalWords: Int
     /// nil when dictations are not kept: today cannot be counted then.
     let todayWords: Int?
+    /// how many takes today; nil, like the words, when nothing is kept.
+    let todayCount: Int?
     /// the last seven calendar days, oldest first, empty days at zero.
     let lastSevenDays: [DayWords]
     /// at most three, newest first.
@@ -38,8 +40,13 @@ struct DashboardStats: Equatable {
     ) -> DashboardStats {
         let today = calendar.startOfDay(for: now)
         var byDay: [Date: Int] = [:]
+        var takesToday = 0
         for dictation in dictations {
-            byDay[calendar.startOfDay(for: dictation.startedAt), default: 0] += words(in: dictation.inserted)
+            let day = calendar.startOfDay(for: dictation.startedAt)
+            byDay[day, default: 0] += words(in: dictation.inserted)
+            if day == today {
+                takesToday += 1
+            }
         }
         let week = (0..<7).reversed().compactMap { back -> DayWords? in
             guard let shifted = calendar.date(byAdding: .day, value: -back, to: today) else {
@@ -51,6 +58,7 @@ struct DashboardStats: Equatable {
         return DashboardStats(
             totalWords: totalWords,
             todayWords: keepsDictations ? (byDay[today] ?? 0) : nil,
+            todayCount: keepsDictations ? takesToday : nil,
             lastSevenDays: week,
             recent: Array(dictations.sorted { $0.startedAt > $1.startedAt }.prefix(3)),
             typicalPaste: milliseconds(typicalPaste),

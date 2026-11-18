@@ -41,6 +41,17 @@ final class DashboardStatsTests: XCTestCase {
         XCTAssertEqual(stats.lastSevenDays.map(\.words).reduce(0, +), 6, "eight days ago is outside the week")
     }
 
+    func testTodayCountsTakesNotWords() {
+        let stats = make([
+            dictation("one two three", daysAgo: 0),
+            dictation("four", daysAgo: 0, hour: 9),
+            dictation("five", daysAgo: 1, hour: 23, minute: 59),
+        ])
+        XCTAssertEqual(stats.todayCount, 2)
+        XCTAssertEqual(make([dictation("old", daysAgo: 1)]).todayCount, 0)
+        XCTAssertNil(make([dictation("x", daysAgo: 0)], keeps: false).todayCount, "not kept, not counted")
+    }
+
     func testEmptyDaysAreZero() {
         let stats = make([dictation("hello there", daysAgo: 0)])
         XCTAssertEqual(stats.lastSevenDays.map(\.words), [0, 0, 0, 0, 0, 0, 2])
