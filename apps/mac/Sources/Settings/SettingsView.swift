@@ -435,14 +435,23 @@ struct SettingsView: View {
                 settings: settings,
                 dictations: browser.items
             )
+            // a Table's ideal height is every row it could ever show, and
+            // the window sizes its contents from ideals: left alone it made
+            // the whole window 4,000pt tall and drew it all off-screen. an
+            // ideal of our own; the table still fills what is left.
+            .frame(minHeight: 160, idealHeight: 320, maxHeight: .infinity)
         }
         .frame(maxWidth: SettingsLayout.column)
         .padding(.horizontal, 28)
         .padding(.top, 6)
         .padding(.bottom, 20)
         // the table takes what is left of the pane, never more: on its own
-        // it asks for thousands of points and pushes the intro off the top.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // it asks for thousands of points, and since the window sizes itself
+        // to its content's minimum, the whole window grew thousands of points
+        // tall and drew off-screen. a minimum of zero hands the window's own
+        // height down instead.
+        .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 
     // MARK: - history

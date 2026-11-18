@@ -194,6 +194,12 @@ private struct OpenSettingsAtLaunch: View {
                     if let table = v as? NSTableView {
                         report.append("\(type(of: table)) rows=\(table.numberOfRows) frame=\(table.frame)")
                     }
+                    // anything that scrolls, or is strangely big, with where
+                    // it sits in the window: a pane drawn blank shows here.
+                    if v is NSScrollView || v.frame.height > 3_000 || v.frame.width > 3_000 {
+                        let inWindow = v.convert(v.bounds, to: nil)
+                        report.append("\(String(repeating: " ", count: depth))\(type(of: v)) frame=\(v.frame) inWindow=\(inWindow) hidden=\(v.isHidden) alpha=\(v.alphaValue)")
+                    }
                     if depth < 60 { v.subviews.forEach { walk($0, depth + 1) } }
                 }
                 walk(view, 0)
