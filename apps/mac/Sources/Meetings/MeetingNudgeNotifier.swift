@@ -37,11 +37,11 @@ final class MeetingNudgeNotifier: NSObject, UNUserNotificationCenterDelegate {
         guard let center else { return }
         center.delegate = self
         let keep = UNNotificationAction(
-            identifier: Self.keepGoing, title: "keep going", options: [])
+            identifier: Self.keepGoing, title: "Keep Going", options: [])
         let stop = UNNotificationAction(
-            identifier: Self.stop, title: "stop", options: [.destructive])
+            identifier: Self.stop, title: "Stop", options: [.destructive])
         let show = UNNotificationAction(
-            identifier: Self.showInFinder, title: "show in finder", options: [])
+            identifier: Self.showInFinder, title: "Show in Finder", options: [])
         center.setNotificationCategories([
             UNNotificationCategory(
                 identifier: Self.category, actions: [keep, stop],
@@ -64,8 +64,8 @@ final class MeetingNudgeNotifier: NSObject, UNUserNotificationCenterDelegate {
     func ask(quietFor: Duration) {
         guard let center else { return }
         let content = UNMutableNotificationContent()
-        content.title = "still recording?"
-        content.body = "nothing has been heard for \(quietFor.spoken). it keeps going unless you stop it."
+        content.title = "Still recording?"
+        content.body = "Nothing has been heard for \(quietFor.spoken). It keeps going unless you stop it."
         content.categoryIdentifier = Self.category
         content.interruptionLevel = .timeSensitive
         let request = UNNotificationRequest(
@@ -93,7 +93,7 @@ final class MeetingNudgeNotifier: NSObject, UNUserNotificationCenterDelegate {
     func saved(_ summary: MeetingSummary) {
         guard let center else { return }
         let content = UNMutableNotificationContent()
-        content.title = "meeting saved"
+        content.title = "Meeting saved"
         content.body = Self.savedBody(summary)
         content.categoryIdentifier = Self.savedCategory
         content.interruptionLevel = .active
@@ -107,8 +107,8 @@ final class MeetingNudgeNotifier: NSObject, UNUserNotificationCenterDelegate {
     func saveFailed() {
         guard let center else { return }
         let content = UNMutableNotificationContent()
-        content.title = "the transcript is not saved yet"
-        content.body = "it is kept — the next launch writes it out."
+        content.title = "The transcript isn’t saved yet"
+        content.body = "It’s kept. The next launch writes it out."
         content.interruptionLevel = .active
         center.add(UNNotificationRequest(
             identifier: Self.savedIdentifier, content: content, trigger: nil))
