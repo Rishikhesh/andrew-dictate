@@ -637,7 +637,7 @@ struct HUDTextPill: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(message)
             .font(Font(HUDLayoutEngine.primaryFont))
-            .foregroundStyle(BrandUI.goldPale)
+            .foregroundStyle(Color.white.opacity(0.92))
             .lineLimit(lineCount)
             .lineSpacing(HUDLayoutEngine.wrappedLineSpacing)
             .truncationMode(.tail)
@@ -671,7 +671,7 @@ struct HUDTextPill: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(message)
                 .font(Font(HUDLayoutEngine.primaryFont))
-                .foregroundStyle(BrandUI.goldPale)
+                .foregroundStyle(Color.white.opacity(0.92))
                 .lineLimit(lineCount)
                 .lineSpacing(HUDLayoutEngine.wrappedLineSpacing)
                 .truncationMode(.tail)
@@ -713,10 +713,10 @@ struct HUDChoicePill: View {
                     HStack(spacing: HUDLayoutEngine.keyGap) {
                         Text(button.key)
                             .font(Font(HUDLayoutEngine.keyFont))
-                            .foregroundStyle(BrandUI.goldPale.opacity(0.55))
+                            .foregroundStyle(Color.white.opacity(0.55))
                         Text(button.title)
                             .font(Font(HUDLayoutEngine.buttonFont))
-                            .foregroundStyle(BrandUI.goldPale)
+                            .foregroundStyle(Color.white.opacity(0.92))
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .frame(maxWidth: titleWidth)
@@ -749,7 +749,7 @@ struct HUDChoicePill: View {
             )
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("rewrite it how?")
+        .accessibilityLabel("Rewrite it how?")
     }
 }
 
@@ -765,7 +765,7 @@ struct HUDChoiceButtonStyle: ButtonStyle {
             .contentShape(Capsule())
             .glassEffect(
                 .regular
-                    .tint(BrandUI.goldPale.opacity(isDefault ? 0.24 : 0.08))
+                    .tint(isDefault ? AppLook.accent.opacity(0.5) : Color.white.opacity(0.08))
                     .interactive(),
                 in: Capsule()
             )
@@ -781,13 +781,13 @@ struct HUDPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Font(HUDLayoutEngine.buttonFont))
-            .foregroundStyle(BrandUI.goldPale)
+            .foregroundStyle(Color.white.opacity(0.92))
             .lineLimit(1)
             .fixedSize()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Capsule())
             .glassEffect(
-                .regular.tint(BrandUI.goldPale.opacity(0.10)).interactive(),
+                .regular.tint(Color.white.opacity(0.10)).interactive(),
                 in: Capsule()
             )
             .opacity(configuration.isPressed ? 0.72 : 1)
