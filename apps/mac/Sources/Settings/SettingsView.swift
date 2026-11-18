@@ -415,6 +415,7 @@ struct SettingsView: View {
     // MARK: - dictionary
 
     private var dictionaryTab: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 10) {
             SectionHero(.dictionary)
             FixWordShortcutRow(settings: settings, coordinator: coordinator)
@@ -435,23 +436,17 @@ struct SettingsView: View {
                 settings: settings,
                 dictations: browser.items
             )
-            // a Table's ideal height is every row it could ever show, and
-            // the window sizes its contents from ideals: left alone it made
-            // the whole window 4,000pt tall and drew it all off-screen. an
-            // ideal of our own; the table still fills what is left.
-            .frame(minHeight: 160, idealHeight: 320, maxHeight: .infinity)
         }
         .frame(maxWidth: SettingsLayout.column)
         .padding(.horizontal, 28)
         .padding(.top, 6)
         .padding(.bottom, 20)
-        // the table takes what is left of the pane, never more: on its own
-        // it asks for thousands of points, and since the window sizes itself
-        // to its content's minimum, the whole window grew thousands of points
-        // tall and drew off-screen. a minimum of zero hands the window's own
-        // height down instead.
-        .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
         .frame(maxWidth: .infinity, alignment: .top)
+        }
+        // the whole page scrolls, like every other pane. the table has a
+        // height of its own (see DictionaryEditor): a Table's ideal height is
+        // every row it could show, and the window sizes itself to its
+        // content, so a table left to grow made the window 4,000pt tall.
     }
 
     // MARK: - history
@@ -957,7 +952,7 @@ private struct DictionaryEditor: View {
             }
 
             Table(store.entries, selection: $selection) {
-                TableColumn("wrong") { entry in
+                TableColumn("Wrong") { entry in
                     DictionaryCellEditor(
                         value: entry.wrong,
                         prompt: "wrong"
@@ -966,7 +961,7 @@ private struct DictionaryEditor: View {
                     }
                 }
 
-                TableColumn("right") { entry in
+                TableColumn("Right") { entry in
                     HStack(spacing: 6) {
                         DictionaryCellEditor(
                             value: entry.right,
@@ -1000,7 +995,11 @@ private struct DictionaryEditor: View {
                 }
             }
             .tableStyle(.inset(alternatesRowBackgrounds: false))
-            .frame(minWidth: 420, minHeight: 190, maxHeight: .infinity)
+            // a height of its own: the page scrolls, so the table can't take
+            // "what is left", and a Table's ideal is every row it could show.
+            // enough for its words, then it scrolls inside itself.
+            .frame(minWidth: 420)
+            .frame(height: min(max(36 + CGFloat(store.entries.count) * 34, 180), 440))
             .overlay {
                 if store.entries.isEmpty {
                     // an unreadable file is not an empty dictionary, and
