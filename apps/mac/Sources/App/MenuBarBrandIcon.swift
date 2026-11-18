@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 import ThinkingOrbsKit
 
@@ -56,7 +57,7 @@ enum MenuBarBrandIcon {
     }
 }
 
-/// the menu bar item's image: a still frame of your orb, and a live one
+/// the menu bar item's image: your orb, always moving, and at full pace
 /// while you talk.
 struct MenuBarIcon: View {
     @ObservedObject var coordinator: DictationCoordinator
@@ -65,54 +66,83 @@ struct MenuBarIcon: View {
 
     var body: some View {
         let look = coordinator.badgeLook
-        Image(nsImage: MenuBarBrandIcon.image(
-            for: look, orb: settings.listeningOrb, time: clock.time))
-            .onChange(of: look == .dictating, initial: true) { _, live in
-                clock.run(live, speed: MenuBarBrandIcon.speed(settings.listeningOrb))
+        Image(nsImage: clock.restAnimating
+            ? MenuBarOrbClock.blank(for: look)
+            : MenuBarBrandIcon.image(for: look, orb: settings.listeningOrb, time: clock.time))
+            .onChange(of: look, initial: true) { _, look in
+                clock.run(look, orb: settings.listeningOrb)
             }
             .onChange(of: settings.listeningOrb) { _, orb in
-                clock.run(look == .dictating, speed: MenuBarBrandIcon.speed(orb))
+                clock.run(look, orb: orb)
             }
     }
 }
 
-/// the orb's clock in the menu bar: it always moves. at rest it drifts
-/// slowly at a few frames a second, so it costs next to nothing; while you
-/// talk it runs at full pace, 15 frames a second. the change of pace keeps
-/// the time it is at, so there is never a jump. with Reduce Motion it
-/// holds still.
+/// the orb's clock in the menu bar. it never stops, unless Reduce Motion is
+/// on, when it holds still:
+/// - while you talk, SwiftUI draws it fresh at 15 frames a second;
+/// - at rest (the plain look only) it drifts slowly forward and back over a
+///   loop of frames drawn once and handed to Core Animation, which plays
+///   them in the system's render server. redrawing the label through
+///   SwiftUI 8 times a second cost ~20% CPU at rest; this costs ~0.
+/// the other looks (a meeting, a call, setup) hold a still frame, since
+/// they are marks you should be able to read.
 @MainActor
 final class MenuBarOrbClock: ObservableObject {
-    /// a frame each orb shows well at rest.
     @Published private(set) var time: Double = 1.2
+    /// the rest loop is playing in its layer; the label shows a blank.
+    @Published private(set) var restAnimating = false
 
     private static let framesPerSecond: Double = 15
-    /// at rest: slow and cheap, but never still.
     private static let restFramesPerSecond: Double = 8
     private static let restPace: Double = 0.35
+    /// 48 frames at 8 a second: six seconds forward, six back.
+    private static let restFrames = 48
+
     private var timer: Timer?
     private var lastTick = Date()
     private var speed: Double = 1
+    private let rest = RestOrbLayer()
 
-    func run(_ live: Bool, speed: Double) {
+    func run(_ look: BadgeLook, orb: ListeningOrb) {
         timer?.invalidate()
         timer = nil
+        rest.stop()
+        restAnimating = false
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             return
         }
-        self.speed = live ? speed : speed * Self.restPace
-        lastTick = Date()
-        let fps = live ? Self.framesPerSecond : Self.restFramesPerSecond
-        let timer = Timer(timeInterval: 1 / fps, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.tick()
+        let speed = MenuBarBrandIcon.speed(orb)
+        switch look {
+        case .dictating:
+            self.speed = speed
+            lastTick = Date()
+            let timer = Timer(timeInterval: 1 / Self.framesPerSecond, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.tick() }
             }
+            timer.tolerance = 0.3 / Self.framesPerSecond
+            // .common, so it keeps going while the panel is open.
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
+        case .idle:
+            let step = speed * Self.restPace / Self.restFramesPerSecond
+            let base = time
+            let frames = (0..<Self.restFrames).map { i in
+                MenuBarBrandIcon.image(for: .idle, orb: orb, time: base + Double(i) * step)
+            }
+            restAnimating = rest.play(frames, framesPerSecond: Self.restFramesPerSecond)
+        default:
+            break
         }
-        // lets macOS batch the wake-ups with others, which saves power.
-        timer.tolerance = 0.3 / fps
-        // .common, so it keeps going while the panel is open.
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+    }
+
+    /// an empty image the size of the icon, so the item keeps its width
+    /// while the layer draws the orb.
+    static func blank(for look: BadgeLook) -> NSImage {
+        let image = NSImage(size: BadgeMarks.size)
+        image.isTemplate = true
+        image.accessibilityDescription = "Andrew Dictate"
+        return image
     }
 
     private func tick() {
@@ -120,5 +150,112 @@ final class MenuBarOrbClock: ObservableObject {
         // a stall (sleep, a busy main thread) is not a jump forward.
         time += min(now.timeIntervalSince(lastTick), 0.25) * speed
         lastTick = now
+    }
+}
+
+/// the rest loop's layer, laid over the menu bar item. it finds the item's
+/// view through its window, the one status bar window this app has, and
+/// tints the template frames itself in the menu bar's ink, again whenever
+/// the menu bar turns light or dark. if the view can't be found it plays
+/// nothing and the label keeps its still frame.
+@MainActor
+private final class RestOrbLayer {
+    private static let logger = Logger(subsystem: AppIdentity.loggingSubsystem, category: "menu-bar")
+    private let layer = CALayer()
+    private var frames: [NSImage] = []
+    private var framesPerSecond: Double = 8
+    private var appearanceWatch: NSKeyValueObservation?
+    private var frameWatch: NSKeyValueObservation?
+
+    func play(_ frames: [NSImage], framesPerSecond: Double) -> Bool {
+        guard let host = Self.statusItemView() else {
+            Self.logger.notice("rest orb: no menu bar item view found, holding a still frame")
+            return false
+        }
+        self.frames = frames
+        self.framesPerSecond = framesPerSecond
+        host.wantsLayer = true
+        if layer.superlayer == nil {
+            host.layer?.addSublayer(layer)
+        }
+        appearanceWatch = host.observe(\.effectiveAppearance) { [weak self] _, _ in
+            Task { @MainActor in self?.animate(in: host) }
+        }
+        // the item is laid out after it first shows: centre again on every size.
+        frameWatch = host.observe(\.frame) { [weak self] _, _ in
+            Task { @MainActor in self?.center(in: host) }
+        }
+        animate(in: host)
+        return true
+    }
+
+    func stop() {
+        appearanceWatch = nil
+        frameWatch = nil
+        layer.removeAllAnimations()
+        layer.removeFromSuperlayer()
+    }
+
+    private func animate(in host: NSView) {
+        let scale = host.window?.backingScaleFactor ?? 2
+        layer.contentsScale = scale
+        center(in: host)
+
+        var ink = NSColor.black
+        host.effectiveAppearance.performAsCurrentDrawingAppearance {
+            ink = NSColor.labelColor.usingColorSpace(.sRGB) ?? .black
+        }
+        let tinted = frames.compactMap { Self.tint($0, ink: ink, scale: scale) }
+        guard tinted.count > 1 else { return }
+        // forward, then back without repeating either end: no jump at the turn.
+        let loop = tinted + tinted.reversed().dropFirst().dropLast()
+        let animation = CAKeyframeAnimation(keyPath: "contents")
+        animation.values = loop
+        animation.calculationMode = .discrete
+        animation.duration = Double(loop.count) / framesPerSecond
+        animation.repeatCount = .infinity
+        layer.contents = tinted.first
+        layer.add(animation, forKey: "orb")
+    }
+
+    private func center(in host: NSView) {
+        let size = BadgeMarks.size
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.frame = CGRect(
+            x: (host.bounds.width - size.width) / 2,
+            y: (host.bounds.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+        CATransaction.commit()
+    }
+
+    /// a template frame filled with the ink, as the menu bar would tint it.
+    private static func tint(_ image: NSImage, ink: NSColor, scale: CGFloat) -> CGImage? {
+        let width = Int(image.size.width * scale)
+        let height = Int(image.size.height * scale)
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        image.draw(in: rect)
+        NSGraphicsContext.restoreGraphicsState()
+        context.setBlendMode(.sourceIn)
+        context.setFillColor(ink.cgColor)
+        context.fill(rect)
+        return context.makeImage()
+    }
+
+    /// the menu bar item's own view: the content of this app's status bar
+    /// window. an app with one menu bar item has one such window.
+    private static func statusItemView() -> NSView? {
+        NSApp.windows
+            .first { String(describing: type(of: $0)).contains("StatusBarWindow") }?
+            .contentView
     }
 }
