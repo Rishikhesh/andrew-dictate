@@ -72,10 +72,5 @@ struct MeetingModelChooserView: View {
     )
     .padding(24)
     .frame(width: 800)
-    .background(BrandUI.windowBg)
-    .foregroundStyle(BrandUI.textPrimary)
-    .font(BrandUI.bodyFont)
-    .brandTinted()
-    .controlSize(.small)
-    .preferredColorScheme(.dark)
+    .tint(AppLook.accent)
 }
