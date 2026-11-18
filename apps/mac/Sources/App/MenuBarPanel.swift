@@ -1,11 +1,13 @@
 import AppKit
 import SwiftUI
+import ThinkingOrbsKit
 
-/// the badge's panel: control center's shape, the app's words. a header
-/// that says whether you can talk, the meeting while one runs (or the
-/// record tile with the meetings window under it), two tiles for what you
-/// reach for, a list of what needs you that is empty when nothing does,
-/// and the app's own lines at the foot.
+/// the menu bar icon's panel, in the look every window shares: glass, the
+/// Mac's accent and a soft glow at the foot. a header that says whether you
+/// can talk, the meeting while one runs (or the record tile), two tiles for
+/// what you reach for, today's words, a list of what needs you that is
+/// empty when nothing does, and the app's own lines at the foot, read like
+/// a menu.
 ///
 /// the rows are the menu's (ADR 0030): nothing here is configuration
 /// that belongs in settings. a tile that switches something (the rewrite,
@@ -20,8 +22,16 @@ struct MenuBarPanel: View {
 
     @Environment(\.openSettings) private var openSettings
     @State private var window: NSWindow?
+    /// the last seven days' words from the archive, oldest first; nil until
+    /// read, or when nothing is kept to count.
+    @State private var week: [DashboardStats.DayWords]?
 
     static let width: CGFloat = 320
+
+    private struct WeekKey: Equatable {
+        let lastHeard: String?
+        let keeps: Bool
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -35,6 +45,9 @@ struct MenuBarPanel: View {
                 rewriteTile
                 fixAWordTile
             }
+            if settings.keepDictations, let week {
+                todayStrip(week)
+            }
             if !notices.isEmpty {
                 noticesModule
             }
@@ -46,7 +59,14 @@ struct MenuBarPanel: View {
         // stack is squeezed to fit a guess: tiles shrink under their own
         // glyphs and the second lines fall out of their modules.
         .fixedSize(horizontal: false, vertical: true)
+        .background { BottomGlow(size: 260) }
+        .tint(AppLook.accent)
         .background(PanelWindowReader { window = $0 })
+        // read again after every take, so today's count is today's, and
+        // when keeping is switched.
+        .task(id: WeekKey(lastHeard: coordinator.lastHeard, keeps: settings.keepDictations)) {
+            await readWeek()
+        }
     }
 
     /// the panel goes the way a menu goes once something is chosen.
@@ -54,57 +74,77 @@ struct MenuBarPanel: View {
         window?.close()
     }
 
+    private func showSettings() {
+        close()
+        NSApp.activate()
+        openSettings()
+    }
+
     // MARK: - header
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 30, height: 30)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
+            ThinkingOrb(
+                state: OrbState(rawValue: settings.listeningOrb.rawValue) ?? .composing,
+                theme: .auto,
+                displaySize: 38
+            )
+            .frame(width: 38, height: 38)
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text("andrew dictate")
-                        .font(.system(size: 13, weight: .semibold))
-                    // two badges that look the same is a bad time; the
-                    // logo is the logo (ADR 0013), so the mark is here.
+                    Text("Andrew Dictate")
+                        .font(.system(size: 13.5, weight: .semibold))
+                    // two icons that look the same is a bad time, so the
+                    // dev build says so here.
                     if Capabilities.current.announcesItself {
-                        Text("dev")
+                        Text("Dev")
                             .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(Capsule().fill(.quaternary))
-                            .help("dev build — \(AppIdentity.bundleID)")
+                            .help("Dev build — \(AppIdentity.bundleID)")
                     }
                 }
-                Text(statusLine)
-                    .font(.system(size: 11))
-                    .foregroundStyle(
-                        coordinator.needsAttention ? BrandUI.attention : .secondary
-                    )
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(status.color)
+                        .frame(width: 6, height: 6)
+                    Text(status.text)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .accessibilityElement(children: .combine)
             }
             Spacer(minLength: 8)
-            CircleIconButton(symbol: "gearshape", label: "settings") {
-                close()
-                NSApp.activate()
-                openSettings()
+            Button(action: showSettings) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 18, height: 18)
             }
-            .keyboardShortcut(",")
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .help("Settings (⌘,)")
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 4)
+        .padding(.top, 2)
         .padding(.bottom, 2)
     }
 
     /// whether you can talk. "ready" alone is furniture, so it says how.
-    private var statusLine: String {
+    private var status: (text: String, color: Color) {
         if coordinator.needsAttention {
-            return "setup isn't finished"
+            return ("Setup isn't finished", .red)
+        }
+        if coordinator.meetings.isRecording {
+            return ("Recording a meeting", .red)
         }
         if coordinator.state != .idle {
-            return coordinator.state.displayName
+            return (coordinator.state.displayName.capitalizedFirst, AppLook.accent)
         }
-        return "ready · hold \(settings.dictationHotkey.displayName) to talk"
+        return ("Ready · hold \(settings.dictationHotkey.displayName) to talk", .green)
     }
 
     // MARK: - meetings
@@ -120,13 +160,13 @@ struct MenuBarPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 RecordingDot(isLive: coordinator.meetings.isRecording)
-                // the clock reads the coordinator each second; the menu was
-                // drawn once per open, the panel stays up and must tick.
+                // the clock reads the coordinator each second; the panel
+                // stays up and must tick.
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     Text(
-                        coordinator.meetings.phase.menuLine(
+                        (coordinator.meetings.phase.menuLine(
                             elapsed: coordinator.meetings.elapsed
-                        ) ?? "recording"
+                        ) ?? "recording").capitalizedFirst
                     )
                     .font(.system(size: 13, weight: .semibold))
                     .monospacedDigit()
@@ -137,68 +177,85 @@ struct MenuBarPanel: View {
                 // transcript" the second line has no width to spare. it is
                 // here while the meeting is written out too, because that
                 // is when the notes arrive.
-                PillButton("open", symbol: "rectangle.on.rectangle") {
+                Button("Open") {
                     close()
                     coordinator.openMeetings()
                 }
-                .accessibilityLabel("open the meetings window")
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .accessibilityLabel("Open the meetings window")
             }
             if coordinator.meetings.isRecording {
                 HStack(spacing: 8) {
-                    PillButton(
+                    Button(
                         coordinator.isLiveTranscriptShown
-                            ? "hide live transcript"
-                            : "live transcript",
-                        symbol: "text.bubble",
-                        isOn: coordinator.isLiveTranscriptShown
+                            ? "Hide Live Transcript"
+                            : "Live Transcript"
                     ) {
                         coordinator.toggleLiveTranscript()
                     }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                     Spacer(minLength: 0)
-                    PillButton("stop", symbol: "stop.fill", tint: .red) {
+                    Button {
                         close()
                         coordinator.stopMeeting()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Stop")
+                            KeyCaps(["⌘", "⇧", "."], onTint: true)
+                        }
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(.red)
+                    .controlSize(.small)
                     .keyboardShortcut(".", modifiers: [.command, .shift])
                 }
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .panelModule()
+        .glassModule()
     }
 
     /// nothing starts a recording but you (ADR 0023, 0047). a call nobody
     /// records leads the tile's second line for as long as it lasts; the
     /// other meeting models on this mac are behind its chevron.
     private var recordTile: some View {
-        VStack(spacing: 0) {
-            recordRow
-            Divider().padding(.leading, 50)
-            meetingsRow
-        }
-        .panelModule()
-    }
-
-    private var recordRow: some View {
         HStack(spacing: 0) {
-            TileButton(
-                symbol: "record.circle",
-                title: "record a meeting",
-                subtitle: coordinator.unrecordedCall.map {
-                    "call in \($0) · not recording"
-                } ?? "hears the whole mac",
-                isOn: false,
-                tint: .red,
-                emphasised: coordinator.unrecordedCall != nil
-            ) {
+            Button {
                 close()
                 coordinator.startMeeting()
+            } label: {
+                TileLabel(hovers: true) {
+                    HStack(spacing: 11) {
+                        TileGlyph(symbol: "record.circle", isOn: false, tint: .red)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Record a Meeting")
+                                .font(.system(size: 12.5, weight: .semibold))
+                            Text(
+                                coordinator.unrecordedCall.map {
+                                    "Call in \($0) · not recording"
+                                } ?? "Hears the whole Mac"
+                            )
+                            .font(.system(size: 11))
+                            .foregroundStyle(coordinator.unrecordedCall != nil ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                            .lineLimit(1)
+                        }
+                        Spacer(minLength: 6)
+                        if let shortcut = settings.meetingShortcut {
+                            KeyCaps(shortcut.keyCaps)
+                        }
+                    }
+                }
             }
+            .buttonStyle(PressStyle())
+            .accessibilityLabel("Record a meeting")
+
             let others = coordinator.recordWithChoices
             if !others.isEmpty {
                 Menu {
-                    Section("record with") {
+                    Section("Record with") {
                         ForEach(others, id: \.model) { choice in
                             Button(choice.title) {
                                 close()
@@ -210,32 +267,17 @@ struct MenuBarPanel: View {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 34, height: 52)
+                        .frame(width: 30, height: 52)
                         .contentShape(Rectangle())
                 }
                 .menuStyle(.button)
                 .menuIndicator(.hidden)
                 .buttonStyle(.plain)
                 .fixedSize()
-                .accessibilityLabel("record with another model")
+                .accessibilityLabel("Record with another model")
             }
         }
-    }
-
-    /// the way to what the meetings left behind: the window with every
-    /// meeting's notes and transcript. in the record tile's module because
-    /// it is the same errand's other end.
-    private var meetingsRow: some View {
-        TileButton(
-            symbol: "list.bullet.rectangle",
-            title: "meetings",
-            subtitle: "notes and transcripts",
-            isOn: false,
-            tint: BrandUI.gold
-        ) {
-            close()
-            coordinator.openMeetings()
-        }
+        .glassModule()
     }
 
     // MARK: - tiles
@@ -245,40 +287,113 @@ struct MenuBarPanel: View {
         let modifier = settings.dictationHotkey.rewriteModifier(
             preferring: rewrite.modifier
         )
-        return TileButton(
-            symbol: "wand.and.sparkles",
-            title: "rewrite",
-            subtitle: rewrite.isEnabled
-                ? "on · \(settings.dictationHotkey.displayName)+\(modifier.symbol)"
-                : "off",
-            isOn: rewrite.isEnabled,
-            tint: BrandUI.gold,
-            stacked: true
-        ) {
+        return Button {
             rewrite.isEnabled.toggle()
+        } label: {
+            TileLabel(hovers: true) {
+                VStack(alignment: .leading, spacing: 9) {
+                    TileGlyph(symbol: "wand.and.sparkles", isOn: rewrite.isEnabled, tint: AppLook.accent)
+                    TileWords(
+                        title: "Rewrite",
+                        subtitle: rewrite.isEnabled
+                            ? "On · \(settings.dictationHotkey.displayName) + \(modifier.symbol)"
+                            : "Off"
+                    )
+                }
+            }
         }
-        .panelModule()
-        .accessibilityValue(rewrite.isEnabled ? "on" : "off")
+        .buttonStyle(PressStyle())
+        .glassModule()
+        .accessibilityLabel("Rewrite")
+        .accessibilityValue(rewrite.isEnabled ? "On" : "Off")
+        .accessibilityAddTraits(rewrite.isEnabled ? .isSelected : [])
     }
 
     /// the one time-sensitive action (ADR 0030): you just watched it
     /// mishear a name.
     private var fixAWordTile: some View {
-        TileButton(
-            symbol: "character.cursor.ibeam",
-            title: "fix a word",
-            subtitle: coordinator.lastHeard == nil
-                ? "after your first dictation"
-                : "teach it a word",
-            isOn: false,
-            tint: BrandUI.gold,
-            stacked: true
-        ) {
+        Button {
             close()
             coordinator.openWordFixer()
+        } label: {
+            TileLabel(hovers: coordinator.lastHeard != nil) {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack {
+                        TileGlyph(symbol: "character.cursor.ibeam", isOn: false, tint: AppLook.accent)
+                        Spacer(minLength: 4)
+                        if let shortcut = settings.fixAWordShortcut {
+                            KeyCaps(shortcut.keyCaps)
+                        }
+                    }
+                    TileWords(
+                        title: "Fix a Word",
+                        subtitle: coordinator.lastHeard == nil
+                            ? "After your first dictation"
+                            : "Teach it a word"
+                    )
+                }
+            }
         }
+        .buttonStyle(PressStyle())
         .disabled(coordinator.lastHeard == nil)
-        .panelModule()
+        .opacity(coordinator.lastHeard == nil ? 0.55 : 1)
+        .glassModule()
+        .accessibilityLabel("Fix a word")
+    }
+
+    // MARK: - today
+
+    private func todayStrip(_ week: [DashboardStats.DayWords]) -> some View {
+        let today = week.last?.words ?? 0
+        let most = max(week.map(\.words).max() ?? 0, 1)
+        return HStack(spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(today.formatted())
+                    .font(.system(size: 20, weight: .bold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(today == 1 ? "word today" : "words today")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            HStack(alignment: .bottom, spacing: 3) {
+                ForEach(week, id: \.day) { day in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(day.isToday ? AnyShapeStyle(AppLook.accent) : AnyShapeStyle(.primary.opacity(0.12)))
+                        .frame(width: 6, height: max(2, 24 * CGFloat(day.words) / CGFloat(most)))
+                }
+            }
+            .frame(height: 24, alignment: .bottom)
+            .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .glassModule()
+        .accessibilityElement(children: .combine)
+    }
+
+    /// off the main thread: the archive is a file that grows for years.
+    // ponytail: reads the whole archive per take, as Home does; an index
+    // by day if it ever shows.
+    private func readWeek() async {
+        guard settings.keepDictations else {
+            week = nil
+            return
+        }
+        let dictations = await Task.detached(priority: .utility) {
+            (try? DictationArchive().all()) ?? []
+        }.value
+        week = DashboardStats.make(
+            dictations: dictations,
+            totalWords: 0,
+            typicalPaste: nil,
+            slowestPaste: nil,
+            pasteSample: 0,
+            keepsDictations: true,
+            now: .now,
+            calendar: .current
+        ).lastSevenDays
     }
 
     // MARK: - what needs you
@@ -300,7 +415,7 @@ struct MenuBarPanel: View {
         if coordinator.needsAttention {
             notices.append(Notice(
                 id: "setup", symbol: "exclamationmark.triangle.fill",
-                text: "setup isn't finished", action: "finish",
+                text: "Setup isn't finished", action: "Finish setup…",
                 isAttention: true
             ) { [coordinator] in
                 coordinator.runOnboardingAgain()
@@ -309,7 +424,7 @@ struct MenuBarPanel: View {
         if !coordinator.meetings.isRecording, coordinator.meetingsNeedAttention {
             notices.append(Notice(
                 id: "systemAudio", symbol: "speaker.slash.fill",
-                text: "meetings can't hear the mac", action: "fix…",
+                text: "Meetings can't hear the Mac", action: "Fix…",
                 isAttention: true
             ) { [coordinator] in
                 coordinator.runOnboardingAgain(
@@ -319,7 +434,7 @@ struct MenuBarPanel: View {
         if !coordinator.meetings.isRecording, coordinator.canRetryLastFailure {
             notices.append(Notice(
                 id: "retry", symbol: "arrow.clockwise",
-                text: "the last take didn't land", action: "try again"
+                text: "The last take didn't land", action: "Try again"
             ) { [coordinator] in
                 coordinator.retryLastFailure()
             })
@@ -328,7 +443,7 @@ struct MenuBarPanel: View {
            let learned = coordinator.undoableLearning {
             notices.append(Notice(
                 id: "learned", symbol: "book.closed",
-                text: "learned \(learned.right)", action: "undo"
+                text: "Learned “\(learned.right)”", action: "Undo"
             ) { [coordinator] in
                 coordinator.undoLearning()
             })
@@ -336,7 +451,7 @@ struct MenuBarPanel: View {
         if !coordinator.meetings.isRecording, coordinator.showsLastMeetingRow {
             notices.append(Notice(
                 id: "lastMeeting", symbol: "doc.text",
-                text: "the meeting is saved", action: "show in finder"
+                text: "The meeting is saved", action: "Show in Finder"
             ) { [coordinator] in
                 coordinator.revealLastMeeting()
             })
@@ -347,7 +462,7 @@ struct MenuBarPanel: View {
            let line = updateHandOff.state(offering: updates.line) {
             notices.append(Notice(
                 id: "update", symbol: "arrow.down.circle",
-                text: line.title, action: Self.updateAction(line),
+                text: line.title.capitalizedFirst, action: Self.updateAction(line),
                 isEnabled: line.isEnabled
             ) { [updateHandOff, updates] in
                 updateHandOff.click(offering: updates.line)
@@ -358,10 +473,10 @@ struct MenuBarPanel: View {
 
     private static func updateAction(_ line: UpdateOffer.LineState) -> String {
         switch line {
-        case .available: "update"
-        case .updating: "updating…"
-        case .restartToFinish: "restart"
-        case .failedCopied: "try again"
+        case .available: "Update"
+        case .updating: "Updating…"
+        case .restartToFinish: "Restart"
+        case .failedCopied: "Try again"
         }
     }
 
@@ -374,69 +489,86 @@ struct MenuBarPanel: View {
                 HStack(spacing: 10) {
                     Image(systemName: notice.symbol)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(notice.isAttention ? BrandUI.attention : .secondary)
+                        .foregroundStyle(notice.isAttention ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                         .frame(width: 20)
+                        .accessibilityHidden(true)
                     Text(notice.text)
                         .font(.system(size: 12))
                         .lineLimit(2)
                     Spacer(minLength: 8)
-                    PillButton(notice.action, isEnabled: notice.isEnabled) {
-                        close()
-                        notice.perform()
-                    }
+                    noticeButton(notice)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 8)
             }
         }
         .padding(.vertical, 2)
-        .panelModule()
+        .glassModule()
+    }
+
+    /// setup's is the one that leads, in the accent.
+    @ViewBuilder
+    private func noticeButton(_ notice: Notice) -> some View {
+        let button = Button(notice.action) {
+            close()
+            notice.perform()
+        }
+        .controlSize(.small)
+        .disabled(!notice.isEnabled)
+        if notice.isAttention {
+            button.buttonStyle(.glassProminent)
+        } else {
+            button.buttonStyle(.glass)
+        }
     }
 
     // MARK: - foot
 
     private var footer: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
+            MenuRow("Meetings") {
+                close()
+                coordinator.openMeetings()
+            }
+            MenuRow("Settings…", keys: ["⌘", ","], action: showSettings)
+                .keyboardShortcut(",")
+            MenuSeparator()
+            MenuRow("About Andrew Dictate") {
+                close()
+                coordinator.openAbout()
+            }
+            // what a friend sends instead of a story: the last fifty
+            // presses and how each ended, never a word of what was said.
+            MenuRow("Copy Diagnostics") {
+                close()
+                coordinator.copyDiagnostics()
+            }
             if hasDevRow {
-                HStack(spacing: 4) {
-                    if Capabilities.current.canResetInPlace {
-                        FooterButton("reset & relaunch") {
-                            close()
-                            coordinator.resetInPlaceForDevelopment()
-                        }
+                MenuSeparator()
+                if Capabilities.current.canResetInPlace {
+                    MenuRow("Reset & Relaunch") {
+                        close()
+                        coordinator.resetInPlaceForDevelopment()
                     }
-                    #if DEBUG
-                    if Capabilities.current.hasLampLab {
-                        FooterButton("lamp lab") {
-                            close()
-                            coordinator.openLampLab()
-                        }
-                        FooterButton("rehearse the lamp") {
-                            close()
-                            coordinator.rehearseHUDForDevelopment()
-                        }
+                }
+                #if DEBUG
+                if Capabilities.current.hasLampLab {
+                    MenuRow("Lamp Lab") {
+                        close()
+                        coordinator.openLampLab()
                     }
-                    #endif
-                    Spacer(minLength: 0)
+                    MenuRow("Rehearse the Lamp") {
+                        close()
+                        coordinator.rehearseHUDForDevelopment()
+                    }
                 }
+                #endif
             }
-            HStack(spacing: 4) {
-                FooterButton("about") {
-                    close()
-                    coordinator.openAbout()
-                }
-                // what a friend sends instead of a story: the last fifty
-                // presses and how each ended, never a word of what was said.
-                FooterButton("copy diagnostics") {
-                    close()
-                    coordinator.copyDiagnostics()
-                }
-                Spacer(minLength: 0)
-                FooterButton("quit") {
-                    NSApp.terminate(nil)
-                }
-                .keyboardShortcut("q")
+            MenuSeparator()
+            MenuRow("Quit", keys: ["⌘", "Q"]) {
+                NSApp.terminate(nil)
             }
+            .keyboardShortcut("q")
         }
         .padding(.top, 2)
     }
@@ -452,193 +584,114 @@ struct MenuBarPanel: View {
 
 // MARK: - the pieces
 
-/// a control center module: a rounded, faintly lit surface.
-private struct PanelModule: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.primary.opacity(0.06))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(.primary.opacity(0.08), lineWidth: 1)
-            }
+/// a press you can feel: a little smaller while held, back on release.
+/// held still with Reduce Motion.
+private struct PressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
-private extension View {
-    func panelModule() -> some View {
-        modifier(PanelModule())
-    }
-}
+/// a tile's face: its content, padded, lit faintly on hover.
+private struct TileLabel<Content: View>: View {
+    var hovers: Bool
+    @ViewBuilder let content: Content
 
-/// control center's tile: a round glyph, lit in the tint when on, and a
-/// title with a line under it. `stacked` puts the glyph above the words,
-/// for the half-width tiles.
-private struct TileButton: View {
-    let symbol: String
-    let title: String
-    let subtitle: String
-    let isOn: Bool
-    let tint: Color
-    var emphasised = false
-    var stacked = false
-    let action: () -> Void
-
-    @Environment(\.isEnabled) private var isEnabled
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            Group {
-                if stacked {
-                    VStack(alignment: .leading, spacing: 8) {
-                        glyph
-                        words
-                    }
-                } else {
-                    HStack(spacing: 10) {
-                        glyph
-                        words
-                    }
-                }
-            }
-            .padding(10)
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        content
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.primary.opacity(isHovered && isEnabled ? 0.06 : 0))
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .opacity(isEnabled ? 1 : 0.5)
-        .onHover { isHovered = $0 }
-        .accessibilityLabel(title)
-        .accessibilityHint(subtitle)
+            .background(shape.fill(.primary.opacity(isHovered && hovers ? 0.05 : 0)))
+            .contentShape(shape)
+            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.15), value: isHovered)
     }
+}
 
-    private var glyph: some View {
+/// control center's round glyph: lit in the tint when on.
+private struct TileGlyph: View {
+    let symbol: String
+    let isOn: Bool
+    let tint: Color
+
+    var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(isOn ? Color.black.opacity(0.85) : (emphasised ? tint : .primary))
-            .frame(width: 30, height: 30)
-            .background(
-                Circle().fill(isOn ? AnyShapeStyle(tint) : AnyShapeStyle(.primary.opacity(0.10)))
-            )
+            .foregroundStyle(isOn ? AnyShapeStyle(.white) : AnyShapeStyle(tint == .red ? .red : .primary))
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(isOn ? AnyShapeStyle(tint) : AnyShapeStyle(.primary.opacity(0.09))))
+            .animation(.easeOut(duration: 0.2), value: isOn)
+            .accessibilityHidden(true)
     }
+}
 
-    private var words: some View {
+private struct TileWords: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 12.5, weight: .semibold))
                 .lineLimit(1)
             Text(subtitle)
                 .font(.system(size: 11))
-                .foregroundStyle(emphasised ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
     }
 }
 
-/// a small capsule: the action at the end of a row, or a meeting's stop.
-private struct PillButton: View {
-    let title: String
-    var symbol: String?
-    var tint: Color?
-    var isOn = false
-    var isEnabled = true
-    let action: () -> Void
+/// a shortcut as small key caps, one per key, the way the mock and a
+/// menu write it.
+struct KeyCaps: View {
+    let keys: [String]
+    /// on a coloured button: white caps on a lighter wash.
+    var onTint = false
 
-    init(
-        _ title: String,
-        symbol: String? = nil,
-        tint: Color? = nil,
-        isOn: Bool = false,
-        isEnabled: Bool = true,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.symbol = symbol
-        self.tint = tint
-        self.isOn = isOn
-        self.isEnabled = isEnabled
-        self.action = action
+    init(_ keys: [String], onTint: Bool = false) {
+        self.keys = keys
+        self.onTint = onTint
     }
 
-    @State private var isHovered = false
-
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let symbol {
-                    Image(systemName: symbol)
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
+        HStack(spacing: 2) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                Text(key)
+                    .font(.system(size: 10.5, weight: .medium))
+                    .frame(minWidth: 17)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 1)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(onTint ? AnyShapeStyle(.white.opacity(0.2)) : AnyShapeStyle(.primary.opacity(0.09)))
+                    )
             }
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(background))
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : 0.5)
-        .onHover { isHovered = $0 }
-    }
-
-    private var foreground: AnyShapeStyle {
-        if tint != nil || isOn {
-            return AnyShapeStyle(Color.white)
-        }
-        return AnyShapeStyle(.primary)
-    }
-
-    private var background: AnyShapeStyle {
-        if let tint {
-            return AnyShapeStyle(tint.opacity(isHovered ? 1 : 0.85))
-        }
-        if isOn {
-            return AnyShapeStyle(BrandUI.goldDeep)
-        }
-        return AnyShapeStyle(.primary.opacity(isHovered ? 0.16 : 0.10))
+        .foregroundStyle(onTint ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.secondary))
+        .accessibilityElement()
+        .accessibilityLabel(keys.joined())
     }
 }
 
-/// the header's round button: settings.
-private struct CircleIconButton: View {
-    let symbol: String
-    let label: String
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(.primary.opacity(isHovered ? 0.16 : 0.08)))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(label)
-        .accessibilityLabel(label)
-    }
-}
-
-/// the foot's quiet lines, lit on hover like a menu row.
-private struct FooterButton: View {
+/// a line at the foot that reads like a menu item: lit in the accent on
+/// hover, its shortcut at the end.
+private struct MenuRow: View {
     let title: String
+    var keys: [String] = []
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: String, keys: [String] = [], action: @escaping () -> Void) {
         self.title = title
+        self.keys = keys
         self.action = action
     }
 
@@ -646,25 +699,46 @@ private struct FooterButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 11))
-                .foregroundStyle(isHovered ? .primary : .secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(.primary.opacity(isHovered ? 0.08 : 0))
-                )
-                .contentShape(Rectangle())
+            HStack {
+                Text(title)
+                    .font(.system(size: 13))
+                Spacer(minLength: 8)
+                if !keys.isEmpty {
+                    Text(keys.joined())
+                        .font(.system(size: 12))
+                        .foregroundStyle(isHovered ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(.tertiary))
+                }
+            }
+            .foregroundStyle(isHovered ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isHovered ? AnyShapeStyle(AppLook.accent) : AnyShapeStyle(.clear))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
     }
 }
 
-/// a meeting's red dot, breathing while it records.
+private struct MenuSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(.primary.opacity(0.1))
+            .frame(height: 0.5)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+    }
+}
+
+/// a meeting's red dot, breathing while it records; still with Reduce
+/// Motion.
 private struct RecordingDot: View {
     let isLive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dim = false
 
     var body: some View {
@@ -673,11 +747,13 @@ private struct RecordingDot: View {
             .frame(width: 10, height: 10)
             .opacity(dim ? 0.35 : 1)
             .animation(
-                isLive ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default,
+                isLive && !reduceMotion
+                    ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                    : .default,
                 value: dim
             )
-            .onAppear { dim = isLive }
-            .onChange(of: isLive) { dim = isLive }
+            .onAppear { dim = isLive && !reduceMotion }
+            .onChange(of: isLive) { dim = isLive && !reduceMotion }
             .accessibilityHidden(true)
     }
 }

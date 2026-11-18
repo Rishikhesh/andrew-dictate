@@ -45,10 +45,15 @@ struct MeetingShortcut: Codable, Hashable, Sendable {
     /// the chip in settings: modifiers in the order the mac writes them,
     /// then the key.
     var displayName: String {
+        keyCaps.joined()
+    }
+
+    /// the same, one key cap per key: what the menu bar panel shows.
+    var keyCaps: [String] {
         let held = [
             (Modifiers.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘"),
         ]
-        return held.filter { modifiers.contains($0.0) }.map(\.1).joined() + keyName
+        return held.filter { modifiers.contains($0.0) }.map(\.1) + [keyName]
     }
 
     /// Why settings will not take a shortcut, in the few words the row says.
