@@ -2,7 +2,8 @@ import Carbon
 import Foundation
 import os
 
-/// The meeting shortcut, registered with the system as a global hot key.
+/// A shortcut registered with the system as a global hot key: the meeting
+/// shortcut, and fix a word's.
 ///
 /// Not the dictation key's mechanism on purpose. That one listens to every
 /// key through an event monitor, which is the accessibility permission, and
@@ -11,7 +12,28 @@ import os
 /// pressed, hears no other key, and takes the press, so the dictation key's
 /// monitor is not shown it.
 @MainActor
-final class MeetingHotkey {
+final class GlobalHotkey {
+    /// which shortcut this is: its id among this process's hot keys, and
+    /// what the log calls it.
+    enum Slot: UInt32, Sendable {
+        case meeting = 1
+        case fixAWord = 2
+
+        var name: String {
+            switch self {
+            case .meeting: "meeting"
+            case .fixAWord: "fix a word"
+            }
+        }
+    }
+
+    let slot: Slot
+
+    init(_ slot: Slot) {
+        self.slot = slot
+        slotID = slot.rawValue
+    }
+
     /// the shortcut was pressed.
     var onPress: (() -> Void)?
 
@@ -21,7 +43,7 @@ final class MeetingHotkey {
     }
 
     /// While the settings row listens for a new combination, the old one
-    /// must not fire: pressing it again to keep it would start a meeting.
+    /// must not fire: pressing it again to keep it would do what it does.
     var isHeld = false {
         didSet { apply() }
     }
@@ -51,21 +73,29 @@ final class MeetingHotkey {
 
     /// Why, from the last registration.
     private(set) var failure: Failure? {
-        didSet { Self.lastFailure = failure }
+        didSet { Self.lastFailures[slot] = failure }
     }
 
     /// The same answer, where the settings row reads it. The coordinator
-    /// owns the hot key and passes on only whether it failed, and only when
-    /// the setting changes; this is current after every registration,
-    /// including the one when the row stops listening. There is one meeting
-    /// hot key in the app, so its last answer is the answer.
-    private(set) static var lastFailure: Failure?
+    /// owns the hot keys and passes on only whether one failed, and only
+    /// when the setting changes; this is current after every registration,
+    /// including the one when the row stops listening. There is one hot key
+    /// per slot in the app, so its last answer is the answer.
+    static func lastFailure(_ slot: Slot) -> Failure? {
+        lastFailures[slot]
+    }
+
+    private static var lastFailures: [Slot: Failure] = [:]
+
+    /// the slot's id, readable from the event handler, which runs on the
+    /// main thread but outside the actor's view.
+    private nonisolated let slotID: UInt32
 
     private var hotKey: EventHotKeyRef?
     private var handler: EventHandlerRef?
 
     private static let logger = Logger(
-        subsystem: AppIdentity.loggingSubsystem, category: "meeting-hotkey")
+        subsystem: AppIdentity.loggingSubsystem, category: "global-hotkey")
     /// 'ADMH': ours among the hot keys of this process.
     private static let signature: OSType = 0x41_44_4D_48
 
@@ -82,20 +112,22 @@ final class MeetingHotkey {
         let status = RegisterEventHotKey(
             UInt32(shortcut.keyCode),
             shortcut.modifiers.carbonFlags,
-            EventHotKeyID(signature: Self.signature, id: 1),
+            EventHotKeyID(signature: Self.signature, id: slot.rawValue),
             GetApplicationEventTarget(),
             0,
             &registered)
         guard status == noErr, let registered else {
             failure = Failure(status: status)
             Self.logger.error(
-                "the meeting shortcut \(shortcut.displayName, privacy: .public) could not be registered: \(status)")
+                "the \(self.slot.name, privacy: .public) shortcut \(shortcut.displayName, privacy: .public) could not be registered: \(status)")
             return
         }
         hotKey = registered
-        Self.logger.info("the meeting shortcut \(shortcut.displayName, privacy: .public) is registered")
+        Self.logger.info("the \(self.slot.name, privacy: .public) shortcut \(shortcut.displayName, privacy: .public) is registered")
     }
 
+    /// one handler per hot key, each on the application target: a press
+    /// that is not this one's goes on to the next handler.
     private func installHandlerOnce() {
         guard handler == nil else { return }
         var pressed = EventTypeSpec(
@@ -112,10 +144,11 @@ final class MeetingHotkey {
                     event, EventParamName(kEventParamDirectObject),
                     EventParamType(typeEventHotKeyID), nil,
                     MemoryLayout<EventHotKeyID>.size, nil, &id)
-                guard read == noErr, id.signature == MeetingHotkey.signature else {
+                let hotkey = Unmanaged<GlobalHotkey>.fromOpaque(context).takeUnretainedValue()
+                guard read == noErr, id.signature == GlobalHotkey.signature,
+                      id.id == hotkey.slotID else {
                     return OSStatus(eventNotHandledErr)
                 }
-                let hotkey = Unmanaged<MeetingHotkey>.fromOpaque(context).takeUnretainedValue()
                 Task { @MainActor in hotkey.onPress?() }
                 return noErr
             },

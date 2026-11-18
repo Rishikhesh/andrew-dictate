@@ -1,9 +1,9 @@
 import Foundation
 
-/// An optional global shortcut that starts a meeting, and stops it while one
-/// records. Not a dictation key: that one is a lone modifier held and let
-/// go, and this is a chord pressed once, so it is its own small thing with
-/// its own stored value.
+/// An optional global shortcut: the one that starts a meeting, and stops it
+/// while one records, and the one that opens fix a word. Not a dictation
+/// key: that one is a lone modifier held and let go, and this is a chord
+/// pressed once, so it is its own small thing with its own stored value.
 struct MeetingShortcut: Codable, Hashable, Sendable {
     /// What is held with the key. Shift counts but never stands alone: a
     /// shortcut with only shift in it would fire on every capital letter.
@@ -45,10 +45,15 @@ struct MeetingShortcut: Codable, Hashable, Sendable {
     /// the chip in settings: modifiers in the order the mac writes them,
     /// then the key.
     var displayName: String {
+        keyCaps.joined()
+    }
+
+    /// the same, one key cap per key: what the menu bar panel shows.
+    var keyCaps: [String] {
         let held = [
             (Modifiers.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘"),
         ]
-        return held.filter { modifiers.contains($0.0) }.map(\.1).joined() + keyName
+        return held.filter { modifiers.contains($0.0) }.map(\.1) + [keyName]
     }
 
     /// Why settings will not take a shortcut, in the few words the row says.
@@ -64,6 +69,8 @@ struct MeetingShortcut: Codable, Hashable, Sendable {
         /// ⌘⇧3, 4 or 5.
         case takesAScreenshot
         case includesTheDictationKey(HotkeyBinding)
+        /// the app's other shortcut already has these keys.
+        case isTheOtherShortcut(String)
 
         var message: String {
             switch self {
@@ -79,6 +86,8 @@ struct MeetingShortcut: Codable, Hashable, Sendable {
                 "that's the mac's screenshot key"
             case .includesTheDictationKey(let key):
                 "includes your dictation key, \(key.displayName)"
+            case .isTheOtherShortcut(let name):
+                "that's already the \(name) shortcut"
             }
         }
     }
@@ -107,6 +116,23 @@ struct MeetingShortcut: Codable, Hashable, Sendable {
         }
         return nil
     }
+
+    /// the same keys as `other`, whatever each was called when it was
+    /// recorded: one press cannot be two shortcuts.
+    func isSameKeys(as other: MeetingShortcut?) -> Bool {
+        guard let other else { return false }
+        return keyCode == other.keyCode && modifiers == other.modifiers
+    }
+
+    /// fix a word's shortcut cannot be this one: the dictation key would
+    /// swallow it, or the meeting shortcut has its keys.
+    func stepsAside(forDictationKey key: HotkeyBinding, meetingShortcut: MeetingShortcut?) -> Bool {
+        refusal(againstDictationKey: key) != nil || isSameKeys(as: meetingShortcut)
+    }
+
+    /// fix a word's, until somebody changes or clears it: ⌃⌥F.
+    static let fixAWordDefault = MeetingShortcut(
+        keyCode: 3, modifiers: [.control, .option], keyName: "F")
 
     /// ⌘W or ⌘Q with nothing else held: a hand leaving settings, or the
     /// app. While the row listens these are not taken; listening stops and

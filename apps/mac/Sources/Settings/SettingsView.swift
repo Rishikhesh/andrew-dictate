@@ -417,6 +417,10 @@ struct SettingsView: View {
     private var dictionaryTab: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionHero(.dictionary)
+            FixWordShortcutRow(settings: settings, coordinator: coordinator)
+                .padding(12)
+                .glassModule(cornerRadius: 10)
+                .padding(.bottom, 6)
 
             // the pane used to open with an unlabelled grid, so the two
             // rules it already keeps — whole words, any capitalisation —

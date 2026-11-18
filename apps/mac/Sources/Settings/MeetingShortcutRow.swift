@@ -1,12 +1,38 @@
 import AppKit
 import SwiftUI
 
-/// the meeting shortcut in settings: click the chip, press a combination,
-/// done. the dictation key is a pick from a short list of lone modifiers, so
-/// there was nothing here to reuse that records a chord.
+/// the meeting shortcut in settings.
 struct MeetingShortcutRow: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var coordinator: DictationCoordinator
+
+    var body: some View {
+        ShortcutRecorderRow(
+            title: "meeting shortcut",
+            explanation: "starts a meeting, and stops the one that records. needs ⌃ or ⌘.",
+            shortcut: settings.meetingShortcut,
+            slot: .meeting,
+            set: { settings.setMeetingShortcut($0) },
+            hold: { coordinator.holdMeetingShortcut($0) }
+        )
+    }
+}
+
+/// a global shortcut in settings: click the chip, press a combination,
+/// done. the dictation key is a pick from a short list of lone modifiers, so
+/// there was nothing here to reuse that records a chord. the meeting
+/// shortcut and fix a word's both use it.
+struct ShortcutRecorderRow: View {
+    let title: String
+    let explanation: String
+    let shortcut: MeetingShortcut?
+    let slot: GlobalHotkey.Slot
+    /// what the chip says with no shortcut set.
+    var unsetText = "not set"
+    /// stores it, or says why not.
+    let set: (MeetingShortcut?) -> MeetingShortcut.Refusal?
+    /// lets the registered one go while the row listens, and back after.
+    let hold: (Bool) -> Void
 
     @State private var isListening = false
     @State private var monitor: Any?
@@ -16,10 +42,7 @@ struct MeetingShortcutRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                SettingsRowLabel(
-                    "meeting shortcut",
-                    explanation: "starts a meeting, and stops the one that records. needs ⌃ or ⌘."
-                )
+                SettingsRowLabel(title, explanation: explanation)
 
                 Spacer(minLength: 8)
 
@@ -37,11 +60,11 @@ struct MeetingShortcutRow: View {
                             .strokeBorder(.tint, lineWidth: 2)
                     }
                 }
-                .accessibilityLabel("Meeting shortcut")
+                .accessibilityLabel(title.capitalizedFirst)
                 .accessibilityValue(chipText)
                 .accessibilityHint("Press to choose a new one")
 
-                if settings.meetingShortcut != nil {
+                if shortcut != nil {
                     Button("Clear", action: clear)
                 }
             }
@@ -67,7 +90,7 @@ struct MeetingShortcutRow: View {
         if isListening {
             return "press a shortcut…"
         }
-        return settings.meetingShortcut?.displayName ?? "not set"
+        return shortcut?.displayName ?? unsetText
     }
 
     /// a refusal, or the system not giving what was chosen: the row says it
@@ -78,8 +101,8 @@ struct MeetingShortcutRow: View {
         if let refusal {
             return refusal
         }
-        if settings.meetingShortcut != nil, !isListening,
-           let failure = MeetingHotkey.lastFailure {
+        if shortcut != nil, !isListening,
+           let failure = GlobalHotkey.lastFailure(slot) {
             return failure.message
         }
         return nil
@@ -96,7 +119,7 @@ struct MeetingShortcutRow: View {
     private func startListening() {
         refusal = nil
         isListening = true
-        coordinator.holdMeetingShortcut(true)
+        hold(true)
         // every key goes to this row until one is taken, so nothing typed
         // meanwhile reaches the pane behind it — except ⌘W and ⌘Q, which
         // end listening and go on to the window.
@@ -114,7 +137,7 @@ struct MeetingShortcutRow: View {
             return
         }
         isListening = false
-        coordinator.holdMeetingShortcut(false)
+        hold(false)
     }
 
     /// the event, to pass it on, or nil to keep it from the window.
@@ -149,7 +172,7 @@ struct MeetingShortcutRow: View {
             stopListening()
             return event
         }
-        if let reason = settings.setMeetingShortcut(shortcut) {
+        if let reason = set(shortcut) {
             // still listening: the next combination may be fine.
             refusal = reason.message
             return nil
@@ -162,6 +185,6 @@ struct MeetingShortcutRow: View {
     private func clear() {
         stopListening()
         refusal = nil
-        settings.setMeetingShortcut(nil)
+        _ = set(nil)
     }
 }

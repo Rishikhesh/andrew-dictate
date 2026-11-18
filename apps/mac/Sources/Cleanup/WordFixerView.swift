@@ -1,22 +1,28 @@
 import AppKit
 import SwiftUI
 
+/// fix a word: what the engine heard, laid out as words you point at. the
+/// one you point at is picked in the accent; one you saved turns green.
 struct WordFixerView: View {
     @ObservedObject var viewModel: WordFixerViewModel
+    /// fix a word's global shortcut, for the footnote; nil when cleared.
+    let shortcut: MeetingShortcut?
+    let close: () -> Void
 
     @State private var lineCopied = false
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("what it heard")
-                .font(BrandUI.sectionLabelFont)
-                .foregroundStyle(BrandUI.textSecondary)
-
-            Text("click a word that came out wrong. click the one next to it to take both.")
+        VStack(alignment: .leading, spacing: 0) {
+            Text("What it heard")
+                .font(.system(size: 15, weight: .semibold))
+            Text("Click a word that came out wrong. Click the one next to it to take both.")
                 .font(.system(size: 12))
-                .foregroundStyle(BrandUI.textSecondary)
+                .foregroundStyle(.secondary)
+                .padding(.top, 2)
+                .padding(.bottom, 12)
 
-            // only the chips scroll. a 200-word dictation used to lay the
+            // only the words scroll. a 200-word dictation used to lay the
             // picker row and the footer out past the bottom edge, so you
             // could see the word you wanted to fix and not reach the field
             // that fixes it.
@@ -29,72 +35,106 @@ struct WordFixerView: View {
                             isSelected: isSelected(span.id)
                         ) {
                             viewModel.tap(span.id)
+                            fieldFocused = true
                         }
                     }
                 }
                 // a concrete width proposal, or the flow falls back to its
                 // hardcoded 480 and stops tracking a resized window.
                 .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(12)
             }
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-                alignment: .topLeading
-            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .glassModule(cornerRadius: 12)
 
-            Divider().overlay(BrandUI.hairline)
-
-            if let phrase = viewModel.selectedPhrase {
-                HStack(spacing: 8) {
-                    Text("heard")
-                        .foregroundStyle(BrandUI.textSecondary)
-                    Text("“\(phrase)”")
-                        .font(BrandUI.machineFont(size: 13))
-                        .foregroundStyle(BrandUI.goldPale)
-                    Text("→")
-                        .foregroundStyle(BrandUI.textSecondary)
-                    TextField("what you meant", text: $viewModel.replacement)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 170)
-                        .onSubmit { viewModel.save() }
-                    Button("save") { viewModel.save() }
-                        .disabled(!viewModel.canSave)
-                }
-                .font(.system(size: 13))
-            } else {
-                Text("nothing picked yet.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(BrandUI.textSecondary)
-            }
+            fixRow
+                .frame(minHeight: 30)
+                .padding(.top, 14)
 
             if let failure = viewModel.failure {
-                Text(failure)
+                Text(failure.capitalizedFirst)
                     .font(.system(size: 12))
-                    .foregroundStyle(BrandUI.attention)
+                    .foregroundStyle(.red)
+                    .padding(.top, 6)
             }
 
-            HStack(spacing: 12) {
-                // "from now on" left out the one dictation you came here
-                // about. no pill and no auto-paste: focus is long gone, so
-                // the button's own label is the whole receipt.
-                if !viewModel.saved.isEmpty {
-                    Button(action: copyFixedLine) {
-                        Text(lineCopied ? "copied" : "copy the fixed line")
-                            .font(.system(size: 11))
-                            .foregroundStyle(BrandUI.gold)
-                    }
-                    .buttonStyle(.plain)
-                }
+            footnote
+                .padding(.top, 12)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background {
+            // esc closes, as it closes any small window that asks one thing.
+            Button("Close", action: close)
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .glassWindow()
+    }
 
-                Text("saved words are corrected from now on, everywhere.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(BrandUI.textSecondary)
+    /// heard → what you meant, and save. before a pick, what to do; after
+    /// a save, what it means.
+    @ViewBuilder
+    private var fixRow: some View {
+        if let phrase = viewModel.selectedPhrase {
+            HStack(spacing: 8) {
+                Text("“\(phrase)” →")
+                    .font(.system(size: 12.5, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                TextField("What you meant", text: $viewModel.replacement)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(.primary.opacity(0.08)))
+                    .overlay(
+                        Capsule().strokeBorder(
+                            AppLook.accent.opacity(fieldFocused ? 0.6 : 0), lineWidth: 2)
+                    )
+                    .animation(.easeOut(duration: 0.15), value: fieldFocused)
+                    .focused($fieldFocused)
+                    .onSubmit { viewModel.save() }
+                Button("Save") { viewModel.save() }
+                    .buttonStyle(.glassProminent)
+                    .disabled(!viewModel.canSave)
+            }
+        } else if !viewModel.saved.isEmpty {
+            Text("Saved. Andrew will write it that way from now on, everywhere.")
+                .font(.system(size: 12))
+                .foregroundStyle(.green)
+        } else {
+            Text("Pick a word above.")
+                .font(.system(size: 12))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var footnote: some View {
+        HStack(spacing: 6) {
+            if let shortcut {
+                KeyCaps(shortcut.keyCaps)
+                Text("opens this from anywhere, on your last dictation. Esc closes it.")
+            } else {
+                Text("Esc closes it.")
+            }
+            Spacer(minLength: 8)
+            // "from now on" left out the one dictation you came here
+            // about. no pill and no auto-paste: focus is long gone, so the
+            // button's own label is the whole receipt.
+            if !viewModel.saved.isEmpty {
+                Button(lineCopied ? "Copied" : "Copy the fixed line", action: copyFixedLine)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .brandGlassWindow()
-        .preferredColorScheme(.dark)
+        .font(.system(size: 11.5))
+        .foregroundStyle(.tertiary)
     }
 
     /// the same shape and the same 1.2 s as the about window's copy button,
@@ -124,27 +164,33 @@ private struct WordChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
         Button(action: action) {
             Text(text)
-                .font(BrandUI.machineFont(size: 14))
-                .foregroundStyle(isSaved ? BrandUI.gold : BrandUI.textPrimary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(isSelected ? BrandUI.gold.opacity(0.2) : .clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(
-                            isSaved || isSelected ? BrandUI.gold : .clear,
-                            lineWidth: 1
-                        )
-                )
+                .font(.system(size: 14))
+                .foregroundStyle(isSaved ? AnyShapeStyle(.green) : AnyShapeStyle(.primary))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 5)
+                .background(shape.fill(fill))
+                .overlay(shape.strokeBorder(AppLook.accent.opacity(isSelected ? 1 : 0), lineWidth: 1))
+                .contentShape(shape)
         }
         .buttonStyle(.plain)
         .disabled(isSaved)
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var fill: AnyShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(AppLook.accent.opacity(0.22))
+        }
+        return AnyShapeStyle(.primary.opacity(isHovered && !isSaved ? 0.09 : 0))
     }
 }
 
@@ -201,21 +247,29 @@ final class WordFixerWindowController: NSWindowController {
     init(
         transcript: String,
         store: DictionaryStore,
-        fullCleanup: Bool = true
+        fullCleanup: Bool = true,
+        shortcut: MeetingShortcut? = nil
     ) {
         let viewModel = WordFixerViewModel(
             transcript: transcript,
             store: store,
             fullCleanup: fullCleanup
         )
+        // the view closes its window on esc; the window is made after it.
+        weak var closing: NSWindow?
         let window = NSWindow(
             contentViewController: NSHostingController(
-                rootView: WordFixerView(viewModel: viewModel)
+                rootView: WordFixerView(
+                    viewModel: viewModel,
+                    shortcut: shortcut,
+                    close: { closing?.performClose(nil) }
+                )
             )
         )
-        window.title = "fix a word"
+        closing = window
+        window.title = "Fix a Word"
         window.styleMask = [.titled, .closable, .resizable]
-        window.setContentSize(NSSize(width: 520, height: 420))
+        window.setContentSize(NSSize(width: 500, height: 400))
         window.minSize = NSSize(width: 420, height: 280)
         window.isReleasedWhenClosed = false
         window.center()

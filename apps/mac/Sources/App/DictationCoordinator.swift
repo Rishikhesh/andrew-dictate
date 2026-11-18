@@ -107,7 +107,9 @@ final class DictationCoordinator: ObservableObject {
     /// the meeting shortcut, registered as a global hot key, which needs no
     /// permission. whether another app holds its combination is the row's
     /// to say.
-    private let meetingHotkey = MeetingHotkey()
+    private let meetingHotkey = GlobalHotkey(.meeting)
+    /// fix a word's, the same way: ⌃⌥F unless changed.
+    private let fixAWordHotkey = GlobalHotkey(.fixAWord)
     @Published private(set) var meetingShortcutIsTaken = false
 
     /// a call is on and nothing is recording it (ADR 0047): the menu's first
@@ -544,6 +546,7 @@ final class DictationCoordinator: ObservableObject {
             self?.meetingsRevision += 1
         }
         wireMeetingShortcut()
+        wireFixAWordShortcut()
 
         permissions = SystemPermissions.snapshot()
         // the stored flag only knows the window was closed once. whether this
@@ -783,7 +786,8 @@ final class DictationCoordinator: ObservableObject {
                 fullCleanup: settings.cleanupEnabled
             ).asHeard(heard),
             store: dictionaryStore,
-            fullCleanup: settings.cleanupEnabled
+            fullCleanup: settings.cleanupEnabled,
+            shortcut: settings.fixAWordShortcut
         )
         wordFixerWindowController = controller
         controller.present()
@@ -2424,6 +2428,29 @@ extension DictationCoordinator {
     /// is let go, so pressing it again does not start a meeting.
     func holdMeetingShortcut(_ held: Bool) {
         meetingHotkey.isHeld = held
+    }
+
+    /// fix a word from anywhere, on the last dictation. before the first
+    /// there is nothing to fix: a beep, and nothing opens.
+    private func wireFixAWordShortcut() {
+        fixAWordHotkey.onPress = { [weak self] in
+            guard let self, self.lastHeard != nil else {
+                NSSound.beep()
+                return
+            }
+            self.openWordFixer()
+        }
+        settings.$fixAWordShortcut
+            .removeDuplicates()
+            .sink { [weak self] shortcut in
+                self?.fixAWordHotkey.shortcut = shortcut
+            }
+            .store(in: &settingsCancellables)
+    }
+
+    /// as `holdMeetingShortcut`, for fix a word's row.
+    func holdFixAWordShortcut(_ held: Bool) {
+        fixAWordHotkey.isHeld = held
     }
 
     #if DEBUG
