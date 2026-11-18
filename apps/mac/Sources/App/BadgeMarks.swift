@@ -1,36 +1,54 @@
 import AppKit
 
-/// every mark the menu bar badge can wear, each one's geometry in one enum
-/// below. the meeting marks were picked from mockups: the tile's own edge
-/// in gold for a meeting, a red triangle for a problem. a different pick is
-/// a different line in `mark(for:)`, or different numbers in one enum.
+/// the listening orb the menu bar wears, as geometry: one frame of
+/// ThinkingOrbsKit's engine in its own square of `side` units, y down. its
+/// own type, so the marks and their tests need no package.
+struct OrbGlyph: Sendable {
+    struct Dot: Sendable {
+        var x, y, radius, alpha: Double
+    }
+
+    struct Line: Sendable {
+        var x1, y1, x2, y2, width, alpha: Double
+    }
+
+    var side: Double
+    var dots: [Dot]
+    var lines: [Line]
+
+    /// no orb at all: the marks on their own.
+    static let none = OrbGlyph(side: 1, dots: [], lines: [])
+}
+
+/// every mark the menu bar icon can wear, each one's geometry in one enum
+/// below. the icon is your listening orb in one colour, like every other
+/// menu bar icon; a meeting puts a red ring round it, a setup gap a red dot
+/// on it, a call nobody records a viewfinder in the orb's own colour.
 ///
-/// all of it is drawn over the badge, in the badge's 18 pt square, y up.
+/// all of it is drawn in the icon's 18 pt square, y up.
 enum BadgeMarks {
-    /// the item never changes width, whatever the badge wears: a wider
+    /// the item never changes width, whatever the icon wears: a wider
     /// image shoves every icon to its left sideways and back.
     static let size = NSSize(width: 18, height: 18)
 
     enum Mark: Equatable, Sendable {
-        /// a take: the gold dot, bottom right.
-        case liveDot
         /// a setup gap: the red dot, top right.
         case setupDot
         /// a call nobody records: a viewfinder, you could catch this.
         case brackets
-        /// getting ready, or writing it out: the rim part of the way round.
+        /// getting ready, or writing it out: the red ring part of the way round.
         case partRim
-        /// recording a meeting: the whole rim.
+        /// recording a meeting: the whole red ring.
         case rim
-        /// a meeting's problem: a red triangle with a black "!".
+        /// a meeting's problem: the whole ring, and a red triangle with a "!".
         case warning
     }
 
-    /// which mark each look wears.
+    /// which mark each look wears. a take wears none: the orb itself comes
+    /// alive while you talk.
     static func mark(for look: BadgeLook) -> Mark? {
         switch look {
-        case .idle: nil
-        case .dictating: .liveDot
+        case .idle, .dictating: nil
         case .callNotRecorded: .brackets
         case .gettingReady: .partRim
         case .recordingMeeting: .rim
@@ -39,280 +57,233 @@ enum BadgeMarks {
         }
     }
 
-    /// the badge wearing `look`'s mark. the bare look hands the badge back
-    /// untouched, so idle is the shipped asset and nothing drawn over it.
-    static func image(for look: BadgeLook, on badge: NSImage) -> NSImage {
-        guard let mark = mark(for: look) else {
-            return badge
+    /// one colour is a template the menu bar tints for Light, Dark, a
+    /// highlighted item and an inactive screen. a look with red in it
+    /// cannot be, so it draws the orb in the label colour itself.
+    static func isTemplate(_ look: BadgeLook) -> Bool {
+        switch mark(for: look) {
+        case nil, .brackets: true
+        case .setupDot, .partRim, .rim, .warning: false
         }
-        let composed = NSImage(size: size, flipped: false) { rect in
-            badge.draw(in: rect)
-            draw(mark, in: rect)
+    }
+
+    static func image(for look: BadgeLook, orb: OrbGlyph) -> NSImage {
+        let mark = mark(for: look)
+        let template = isTemplate(look)
+        let image = NSImage(size: size, flipped: false) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else {
+                return false
+            }
+            // resolved as it draws, so the orb follows the menu bar's look.
+            let ink: NSColor = template ? .black : .labelColor
+            context.saveGState()
+            if let keepOut = keepOut(for: mark, in: rect) {
+                context.addPath(CGPath(rect: rect, transform: nil).subtracting(keepOut))
+                context.clip()
+            }
+            drawOrb(orb, in: orbRect(for: mark, in: rect), ink: ink, context: context)
+            if let mark {
+                draw(mark, in: rect, ink: ink, context: context)
+            }
+            context.restoreGState()
+            // what the keep-out made room for, drawn into it.
+            if mark == .setupDot {
+                context.setFillColor(red.cgColor)
+                context.fillEllipse(in: Dot.rect)
+            }
+            if mark == .warning {
+                drawWarning(in: rect, context: context)
+            }
             return true
         }
-        composed.isTemplate = false
-        return composed
+        image.isTemplate = template
+        return image
     }
 
     // MARK: - geometry, one enum per mark
 
-    /// the dot a take and a setup gap have always worn: 6 pt, ringed in
-    /// the brand black, half a point in from the right edge. gold and
-    /// bottom right for a take, red and top right for setup: gold means
-    /// the mic is live, so "needs you" differs from "listening" in both
-    /// hue and corner. the ring is stroked on the dot's edge, so the canvas
-    /// clips its outer half where the dot touches the top or bottom; that
-    /// is how it has always shipped.
+    /// the orb: a point in from every edge, or small enough to sit inside
+    /// the ring and the viewfinder with room to breathe.
+    enum Orb {
+        static let inset: CGFloat = 1
+        static let insideInset: CGFloat = 3
+    }
+
+    /// 6 pt, top right, with a point and a quarter of nothing round it so
+    /// it reads apart from the orb.
     enum Dot {
-        static let diameter: CGFloat = 6
-        static let ring: CGFloat = 1
-        static let fromRight: CGFloat = 0.5
+        static let rect = NSRect(x: 11.5, y: 11.5, width: 6, height: 6)
+        static let gap: CGFloat = 1.25
     }
 
-    /// the tile inside the asset, which the rim and the brackets are drawn
-    /// over: inset 0.36 pt, its corners curving round a point 4.25 pt in
-    /// from both edges. measured off menubar_36.png, not chosen.
-    enum Tile {
-        static let inset: CGFloat = 0.36
-        static let cornerCentre: CGFloat = 4.25
-    }
-
-    /// the gold edge. it lies over the tile's own outer edge, not outside
-    /// it, so the badge keeps its size and the face keeps its room. where
-    /// it starts and how wide it is are rounded to whole device pixels:
-    /// 1 pt wide on a 1x screen, 1.5 pt on a 2x one, never a smeared 1.3.
+    /// the red ring, its outer edge on the icon's edge.
     enum Rim {
-        static let width: CGFloat = 1.3
-        /// how far round getting ready goes, clockwise from the top middle.
+        static let width: CGFloat = 1.5
+        /// how far round getting ready goes, clockwise from the top.
         static let readyShare: CGFloat = 0.36
         /// the rest of the way round, so the part reads as a part.
-        static let trackOpacity: CGFloat = 0.2
+        static let trackOpacity: CGFloat = 0.25
     }
 
-    /// the rim at the four corners only.
+    /// the viewfinder: four corners, each arm this long.
     enum Brackets {
-        /// from the badge's edge to the end of each arm.
-        static let reach: CGFloat = 5.5
+        static let reach: CGFloat = 5
+        static let width: CGFloat = 1.5
     }
 
-    /// a red triangle in the bottom-right corner, its red inside that
-    /// quarter of the badge, with a black outline to part it from the gold
-    /// mic underneath.
+    /// a red triangle in the bottom-right corner, with a gap round it that
+    /// parts it from the ring and the orb.
     enum Warning {
         static let apex = NSPoint(x: 13, y: 9)
         static let baseLeft = NSPoint(x: 9, y: 1)
         static let baseRight = NSPoint(x: 17, y: 1)
-        static let outline: CGFloat = 1
+        static let gap: CGFloat = 1.25
         static let stem = NSRect(x: 12.5, y: 4, width: 1, height: 2.5)
         static let point = NSRect(x: 12.5, y: 2, width: 1, height: 1)
     }
 
     // MARK: - drawing
 
-    private static let gold = BrandUI.nsColor(BrandUI.goldRGB)
-    private static let black = BrandUI.nsColor(BrandUI.blackRGB)
     private static let red = BrandUI.nsColor(BrandUI.attentionRGB)
 
-    private static func draw(_ mark: Mark, in rect: NSRect) {
+    private static func orbRect(for mark: Mark?, in rect: NSRect) -> NSRect {
+        mark == nil || mark == .setupDot
+            ? rect.insetBy(dx: Orb.inset, dy: Orb.inset)
+            : rect.insetBy(dx: Orb.insideInset, dy: Orb.insideInset)
+    }
+
+    /// where nothing else may draw, so a dot or a triangle sits on a gap
+    /// rather than on the orb.
+    private static func keepOut(for mark: Mark?, in rect: NSRect) -> CGPath? {
         switch mark {
-        case .liveDot:
-            drawDot(
-                NSRect(
-                    x: rect.maxX - Dot.diameter - Dot.fromRight,
-                    y: rect.minY,
-                    width: Dot.diameter,
-                    height: Dot.diameter
-                ),
-                color: gold
-            )
         case .setupDot:
-            drawDot(
-                NSRect(
-                    x: rect.maxX - Dot.diameter - Dot.fromRight,
-                    y: rect.maxY - Dot.diameter,
-                    width: Dot.diameter,
-                    height: Dot.diameter
-                ),
-                color: red
-            )
-        case .brackets:
-            drawBrackets(in: rect)
-        case .partRim:
-            drawPartRim(in: rect)
-        case .rim:
-            gold.setStroke()
-            rimPath(in: rect).stroke()
+            CGPath(
+                ellipseIn: Dot.rect.insetBy(dx: -Dot.gap, dy: -Dot.gap),
+                transform: nil)
         case .warning:
-            drawWarning(in: rect)
+            triangle(in: rect).copy(
+                strokingWithWidth: Warning.gap * 2,
+                lineCap: .round,
+                lineJoin: .round,
+                miterLimit: 10
+            ).union(triangle(in: rect))
+        default:
+            nil
         }
     }
 
-    private static func drawDot(_ dot: NSRect, color: NSColor) {
-        color.setFill()
-        NSBezierPath(ovalIn: dot).fill()
-        black.setStroke()
-        let ring = NSBezierPath(ovalIn: dot)
-        ring.lineWidth = Dot.ring
-        ring.stroke()
+    /// the engine's frame, y down in its own units, laid into `target`.
+    private static func drawOrb(
+        _ orb: OrbGlyph,
+        in target: NSRect,
+        ink: NSColor,
+        context: CGContext
+    ) {
+        let scale = target.width / orb.side
+        func point(_ x: Double, _ y: Double) -> CGPoint {
+            CGPoint(x: target.minX + x * scale, y: target.maxY - y * scale)
+        }
+        context.setLineCap(.round)
+        for line in orb.lines {
+            context.setStrokeColor(ink.withAlphaComponent(ink.alphaComponent * line.alpha).cgColor)
+            context.setLineWidth(line.width * scale)
+            context.move(to: point(line.x1, line.y1))
+            context.addLine(to: point(line.x2, line.y2))
+            context.strokePath()
+        }
+        for dot in orb.dots {
+            let centre = point(dot.x, dot.y)
+            let radius = dot.radius * scale
+            context.setFillColor(ink.withAlphaComponent(ink.alphaComponent * dot.alpha).cgColor)
+            context.fillEllipse(in: CGRect(
+                x: centre.x - radius, y: centre.y - radius,
+                width: radius * 2, height: radius * 2))
+        }
     }
 
-    private static func drawPartRim(in rect: NSRect) {
-        gold.withAlphaComponent(Rim.trackOpacity).setStroke()
-        rimPath(in: rect).stroke()
-
-        let (part, length) = rimPathAndLength(in: rect)
-        part.setLineDash(
-            [length * Rim.readyShare, length],
-            count: 2,
-            phase: 0
-        )
-        gold.setStroke()
-        part.stroke()
+    private static func draw(
+        _ mark: Mark,
+        in rect: NSRect,
+        ink: NSColor,
+        context: CGContext
+    ) {
+        // whole device pixels wide: 2 pt on a 1x screen, 1.5 on a 2x one,
+        // never a smeared 1.5 across two pixels.
+        let scale = deviceScale(context)
+        let width = max(1 / scale, (Rim.width * scale).rounded() / scale)
+        let ring = rect.insetBy(dx: width / 2, dy: width / 2)
+        context.setLineWidth(width)
+        switch mark {
+        case .setupDot:
+            break
+        case .brackets:
+            drawBrackets(in: rect, ink: ink, context: context)
+        case .partRim:
+            context.setStrokeColor(red.withAlphaComponent(Rim.trackOpacity).cgColor)
+            context.strokeEllipse(in: ring)
+            context.setStrokeColor(red.cgColor)
+            context.addArc(
+                center: CGPoint(x: ring.midX, y: ring.midY),
+                radius: ring.width / 2,
+                startAngle: .pi / 2,
+                endAngle: .pi / 2 - 2 * .pi * Rim.readyShare,
+                clockwise: true)
+            context.strokePath()
+        case .rim, .warning:
+            context.setStrokeColor(red.cgColor)
+            context.strokeEllipse(in: ring)
+        }
     }
 
-    /// the whole rim seen through four square windows, one per corner, so
-    /// the brackets are the rim exactly and each arm ends square on the
-    /// pixel grid.
-    private static func drawBrackets(in rect: NSRect) {
-        let scale = deviceScale()
-        let reach = snapped(Brackets.reach, scale: scale)
-        let corners = NSBezierPath()
-        for (x, y) in [
-            (rect.minX, rect.minY),
-            (rect.maxX - reach, rect.minY),
-            (rect.minX, rect.maxY - reach),
-            (rect.maxX - reach, rect.maxY - reach)
+    /// an L in each corner, square ended, on the icon's edge.
+    private static func drawBrackets(in rect: NSRect, ink: NSColor, context: CGContext) {
+        let reach = Brackets.reach
+        let width = Brackets.width
+        context.setFillColor(ink.cgColor)
+        for (x, y, dx, dy) in [
+            (rect.minX, rect.minY, 1.0, 1.0),
+            (rect.maxX, rect.minY, -1.0, 1.0),
+            (rect.minX, rect.maxY, 1.0, -1.0),
+            (rect.maxX, rect.maxY, -1.0, -1.0),
         ] {
-            corners.appendRect(NSRect(x: x, y: y, width: reach, height: reach))
+            context.fill(CGRect(x: x, y: y, width: reach * dx, height: width * dy).standardized)
+            context.fill(CGRect(x: x, y: y, width: width * dx, height: reach * dy).standardized)
         }
-
-        NSGraphicsContext.saveGraphicsState()
-        corners.addClip()
-        gold.setStroke()
-        rimPath(in: rect).stroke()
-        NSGraphicsContext.restoreGraphicsState()
     }
 
-    private static func drawWarning(in rect: NSRect) {
-        let origin = NSPoint(x: rect.minX, y: rect.minY)
-        let triangle = NSBezierPath()
-        triangle.move(to: Warning.apex.offset(by: origin))
-        triangle.line(to: Warning.baseRight.offset(by: origin))
-        triangle.line(to: Warning.baseLeft.offset(by: origin))
-        triangle.close()
+    private static func triangle(in rect: NSRect) -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: rect.minX + Warning.apex.x, y: rect.minY + Warning.apex.y))
+        path.addLine(to: CGPoint(x: rect.minX + Warning.baseRight.x, y: rect.minY + Warning.baseRight.y))
+        path.addLine(to: CGPoint(x: rect.minX + Warning.baseLeft.x, y: rect.minY + Warning.baseLeft.y))
+        path.closeSubpath()
+        return path
+    }
 
-        // the outline is the stroke's outer half; the red fill covers the
-        // inner half, so the red keeps the exact corners above.
-        triangle.lineWidth = Warning.outline * 2
-        triangle.lineJoinStyle = .round
-        black.setStroke()
-        triangle.stroke()
-        red.setFill()
-        triangle.fill()
-
-        // the "!" sits on the triangle's centre line, which is half a
-        // pixel off the grid on a 1x screen: there it moves the half pixel
-        // rather than smear over two.
-        let scale = deviceScale()
-        black.setFill()
+    private static func drawWarning(in rect: NSRect, context: CGContext) {
+        context.setFillColor(red.cgColor)
+        context.addPath(triangle(in: rect))
+        context.fillPath()
+        // the "!" sits on the triangle's centre line, half a pixel off the
+        // grid on a 1x screen: there it moves the half pixel rather than
+        // smear over two.
+        let scale = deviceScale(context)
+        context.setFillColor(NSColor.white.cgColor)
         for part in [Warning.stem, Warning.point] {
-            NSBezierPath(
-                rect: snapped(
-                    part.offsetBy(dx: origin.x, dy: origin.y),
-                    scale: scale
-                )
-            ).fill()
+            let placed = part.offsetBy(dx: rect.minX, dy: rect.minY)
+            context.fill(CGRect(
+                x: (placed.minX * scale).rounded() / scale,
+                y: (placed.minY * scale).rounded() / scale,
+                width: max(1 / scale, (placed.width * scale).rounded() / scale),
+                height: (placed.height * scale).rounded() / scale))
         }
-    }
-
-    private static func rimPath(in rect: NSRect) -> NSBezierPath {
-        rimPathAndLength(in: rect).path
-    }
-
-    /// the rim's centre line, starting at the top middle and running
-    /// clockwise, so a dash from phase 0 fills it the way a clock does,
-    /// and how long it is. both of its edges land on whole device pixels,
-    /// and its corners curve round the same points the tile's do.
-    private static func rimPathAndLength(
-        in rect: NSRect
-    ) -> (path: NSBezierPath, length: CGFloat) {
-        let scale = deviceScale()
-        let outer = snapped(Tile.inset, scale: scale)
-        let width = max(1 / scale, snapped(Rim.width, scale: scale))
-        let band = rect.insetBy(dx: outer + width / 2, dy: outer + width / 2)
-        let radius = Tile.cornerCentre - (outer + width / 2)
-        let length = 4 * (band.width - 2 * radius) + 2 * .pi * radius
-
-        let path = NSBezierPath()
-        path.move(to: NSPoint(x: band.midX, y: band.maxY))
-        path.line(to: NSPoint(x: band.maxX - radius, y: band.maxY))
-        path.appendArc(
-            withCenter: NSPoint(x: band.maxX - radius, y: band.maxY - radius),
-            radius: radius,
-            startAngle: 90,
-            endAngle: 0,
-            clockwise: true
-        )
-        path.line(to: NSPoint(x: band.maxX, y: band.minY + radius))
-        path.appendArc(
-            withCenter: NSPoint(x: band.maxX - radius, y: band.minY + radius),
-            radius: radius,
-            startAngle: 0,
-            endAngle: -90,
-            clockwise: true
-        )
-        path.line(to: NSPoint(x: band.minX + radius, y: band.minY))
-        path.appendArc(
-            withCenter: NSPoint(x: band.minX + radius, y: band.minY + radius),
-            radius: radius,
-            startAngle: -90,
-            endAngle: -180,
-            clockwise: true
-        )
-        path.line(to: NSPoint(x: band.minX, y: band.maxY - radius))
-        path.appendArc(
-            withCenter: NSPoint(x: band.minX + radius, y: band.maxY - radius),
-            radius: radius,
-            startAngle: 180,
-            endAngle: 90,
-            clockwise: true
-        )
-        path.close()
-        path.lineWidth = width
-        return (path, length)
     }
 
     /// pixels per point where this is being drawn: 1 on an external
     /// non-retina screen, 2 on the built-in one.
-    private static func deviceScale() -> CGFloat {
-        guard let context = NSGraphicsContext.current else {
-            return 1
-        }
-        let transform = context.cgContext.userSpaceToDeviceSpaceTransform
+    private static func deviceScale(_ context: CGContext) -> CGFloat {
+        let transform = context.userSpaceToDeviceSpaceTransform
         let scale = hypot(transform.a, transform.b)
         return scale > 0 ? scale : 1
-    }
-
-    /// to the nearest whole device pixel, so a straight edge lands on the
-    /// pixel grid instead of smearing across two.
-    private static func snapped(_ value: CGFloat, scale: CGFloat) -> CGFloat {
-        (value * scale).rounded() / scale
-    }
-
-    private static func snapped(_ rect: NSRect, scale: CGFloat) -> NSRect {
-        let minX = snapped(rect.minX, scale: scale)
-        let minY = snapped(rect.minY, scale: scale)
-        return NSRect(
-            x: minX,
-            y: minY,
-            width: snapped(rect.maxX, scale: scale) - minX,
-            height: snapped(rect.maxY, scale: scale) - minY
-        )
-    }
-}
-
-private extension NSPoint {
-    func offset(by origin: NSPoint) -> NSPoint {
-        NSPoint(x: x + origin.x, y: y + origin.y)
     }
 }

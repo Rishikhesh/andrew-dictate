@@ -2,9 +2,9 @@ import AppKit
 import XCTest
 
 /// what a person checks by eye, asked of the rendered pixels at 1x and 2x:
-/// where the gold and the red land, and where they don't. no whole-image
-/// snapshots, so a nudge to a mark's geometry fails only if it moves a
-/// mark somewhere it should not be.
+/// where the red and the orb's ink land, and where they don't. no
+/// whole-image snapshots, so a nudge to a mark's geometry fails only if it
+/// moves a mark somewhere it should not be.
 final class BadgeMarksTests: XCTestCase {
     private let scales = [1, 2]
 
@@ -12,95 +12,121 @@ final class BadgeMarksTests: XCTestCase {
     /// its left sideways and back.
     func testEveryLookKeepsTheItemEighteenPointsSquare() {
         for look in BadgeLook.allCases {
-            let image = BadgeMarks.image(for: look, on: badge())
+            let image = BadgeMarks.image(for: look, orb: orb)
 
             XCTAssertEqual(image.size, NSSize(width: 18, height: 18), "\(look)")
-            XCTAssertFalse(image.isTemplate, "\(look)")
         }
     }
 
-    func testTheBareBadgeIsTheShippedAsset() {
-        for scale in scales {
-            let idle = render(
-                BadgeMarks.image(for: .idle, on: badge()),
-                scale: scale
-            )
-
-            XCTAssertEqual(idle, render(badge(), scale: scale), "\(scale)x")
+    /// one colour is a template, so it matches every other menu bar icon
+    /// in Light and Dark; only a look with red in it draws its own colours.
+    func testOnlyTheLooksWithRedInThemAreNotTemplates() {
+        let coloured: Set<String> = ["gettingReady", "recordingMeeting", "meetingProblem", "needsSetup"]
+        for look in BadgeLook.allCases {
+            XCTAssertEqual(
+                BadgeMarks.image(for: look, orb: orb).isTemplate,
+                !coloured.contains("\(look)"),
+                "\(look)")
         }
     }
 
-    func testRecordingIsGoldAllTheWayRound() {
+    func testTheBareOrbIsDrawnAndNothingRed() {
         for scale in scales {
-            let rendered = render(.recordingMeeting, scale: scale)
+            for look in [BadgeLook.idle, .dictating] {
+                let rendered = render(look, scale: scale)
+
+                XCTAssertTrue(rendered.hasInk(in: NSRect(x: 7, y: 7, width: 4, height: 4)), "\(look) \(scale)x")
+                XCTAssertEqual(rendered.count(of: red, outside: .zero), 0, "\(look) \(scale)x")
+            }
+        }
+    }
+
+    func testRecordingIsRedAllTheWayRound() {
+        for scale in scales {
+            let rendered = render(.recordingMeeting, scale: scale, orb: .none)
 
             for edge in Edge.allCases {
                 XCTAssertTrue(
-                    rendered.has(gold, in: edge.middle),
+                    rendered.has(red, in: edge.middle),
                     "\(edge) at \(scale)x"
                 )
             }
         }
     }
 
-    func testGettingReadyIsGoldOnlyPartOfTheWayRound() {
+    func testGettingReadyIsRedOnlyPartOfTheWayRound() {
         for scale in scales {
-            let rendered = render(.gettingReady, scale: scale)
-            let goldEdges = Edge.allCases.filter {
-                rendered.has(gold, in: $0.middle)
+            let rendered = render(.gettingReady, scale: scale, orb: .none)
+            let redEdges = Edge.allCases.filter {
+                rendered.has(red, in: $0.middle)
             }
 
-            XCTAssertFalse(goldEdges.isEmpty, "\(scale)x")
-            XCTAssertLessThan(goldEdges.count, 4, "\(scale)x")
+            XCTAssertFalse(redEdges.isEmpty, "\(scale)x")
+            XCTAssertLessThan(redEdges.count, 4, "\(scale)x")
         }
     }
 
-    func testACallIsGoldAtTheCornersAndNotBetween() {
+    func testACallIsMarkedAtTheCornersAndNotBetween() {
         for scale in scales {
-            let rendered = render(.callNotRecorded, scale: scale)
+            let rendered = render(.callNotRecorded, scale: scale, orb: .none)
 
             for corner in corners {
                 XCTAssertTrue(
-                    rendered.has(gold, in: corner),
+                    rendered.hasInk(in: corner),
                     "corner \(corner) at \(scale)x"
                 )
             }
             for edge in Edge.allCases {
                 XCTAssertFalse(
-                    rendered.has(gold, in: edge.middle),
+                    rendered.hasInk(in: edge.middle),
                     "\(edge) at \(scale)x"
                 )
             }
         }
     }
 
-    func testAProblemKeepsItsRedInTheBottomRightCorner() {
+    /// the ring, and a red triangle in the bottom-right corner carrying a
+    /// white "!".
+    func testAProblemHasTheRingAndAWarningInTheBottomRightCorner() {
         let bottomRight = NSRect(x: 9, y: 0, width: 9, height: 9)
         for scale in scales {
             let rendered = render(.meetingProblem, scale: scale)
 
-            XCTAssertTrue(rendered.has(red, in: bottomRight), "\(scale)x")
-            XCTAssertEqual(
-                rendered.count(of: red, outside: bottomRight),
-                0,
-                "\(scale)x"
-            )
-            // and the triangle carries its "!" in the brand black.
+            XCTAssertTrue(rendered.has(red, in: Edge.top.middle), "\(scale)x")
+            XCTAssertTrue(rendered.has(red, in: NSRect(x: 11, y: 2, width: 4, height: 2)), "\(scale)x")
             XCTAssertTrue(
-                rendered.has(black, in: NSRect(x: 12, y: 2, width: 2, height: 4.5)),
+                rendered.has(white, in: NSRect(x: 12, y: 2, width: 2, height: 4.5)),
                 "\(scale)x"
             )
+            XCTAssertTrue(rendered.has(red, in: bottomRight), "\(scale)x")
+        }
+    }
+
+    func testSetupKeepsItsRedDotInTheTopRightCorner() {
+        let topRight = NSRect(x: 10, y: 10, width: 8, height: 8)
+        for scale in scales {
+            let rendered = render(.needsSetup, scale: scale)
+
+            XCTAssertTrue(rendered.has(red, in: topRight), "\(scale)x")
+            XCTAssertEqual(rendered.count(of: red, outside: topRight), 0, "\(scale)x")
         }
     }
 
     // MARK: - what is looked for, and where
 
-    private let gold = BrandUI.goldRGB
     private let red = BrandUI.attentionRGB
-    private let black = BrandUI.blackRGB
+    private let white: [Double] = [255, 255, 255]
+
+    /// a stand-in orb: one solid dot filling the middle, enough to see
+    /// where the orb lands without the engine.
+    private let orb = OrbGlyph(
+        side: 20,
+        dots: [OrbGlyph.Dot(x: 10, y: 10, radius: 4, alpha: 1)],
+        lines: []
+    )
 
     /// two points deep along each edge, four long round its middle: where
-    /// a rim lies and a corner bracket does not reach.
+    /// a ring lies and a corner bracket does not reach.
     private enum Edge: CaseIterable {
         case top, right, bottom, left
 
@@ -114,19 +140,18 @@ final class BadgeMarksTests: XCTestCase {
         }
     }
 
-    /// five points square: the curve and the start of each arm, which is
-    /// where a 1x screen has whole pixels of it.
+    /// three points square: where a viewfinder's corner lies.
     private let corners = [
-        NSRect(x: 0, y: 0, width: 5, height: 5),
-        NSRect(x: 13, y: 0, width: 5, height: 5),
-        NSRect(x: 0, y: 13, width: 5, height: 5),
-        NSRect(x: 13, y: 13, width: 5, height: 5)
+        NSRect(x: 0, y: 0, width: 3, height: 3),
+        NSRect(x: 15, y: 0, width: 3, height: 3),
+        NSRect(x: 0, y: 15, width: 3, height: 3),
+        NSRect(x: 15, y: 15, width: 3, height: 3)
     ]
 
     // MARK: - rendering
 
-    private func render(_ look: BadgeLook, scale: Int) -> Rendered {
-        render(BadgeMarks.image(for: look, on: badge()), scale: scale)
+    private func render(_ look: BadgeLook, scale: Int, orb: OrbGlyph? = nil) -> Rendered {
+        render(BadgeMarks.image(for: look, orb: orb ?? self.orb), scale: scale)
     }
 
     /// drawn the way the menu bar draws it: into a context with `scale`
@@ -158,24 +183,6 @@ final class BadgeMarksTests: XCTestCase {
         )
     }
 
-    /// the asset's two pngs, read from the source tree: the test bundle
-    /// has no asset catalog to ask.
-    private func badge() -> NSImage {
-        let folder = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(
-                "Sources/Assets.xcassets/MenuBarBadge.imageset"
-            )
-        let image = NSImage(size: BadgeMarks.size)
-        for file in ["menubar_18.png", "menubar_36.png"] {
-            let data = try! Data(contentsOf: folder.appendingPathComponent(file))
-            let rep = NSBitmapImageRep(data: data)!
-            rep.size = BadgeMarks.size
-            image.addRepresentation(rep)
-        }
-        return image
-    }
 }
 
 /// a rendered badge, RGBA, top row first.
@@ -187,6 +194,11 @@ private struct Rendered: Equatable {
     /// mark itself, not an edge blended into the badge behind it.
     func has(_ rgb: [Double], in region: NSRect) -> Bool {
         pixels(in: region).contains { Self.matches($0, rgb) }
+    }
+
+    /// an opaque pixel of any colour: the orb or a mark drawn in its ink.
+    func hasInk(in region: NSRect) -> Bool {
+        pixels(in: region).contains { $0[3] > 200 }
     }
 
     func count(of rgb: [Double], outside region: NSRect) -> Int {

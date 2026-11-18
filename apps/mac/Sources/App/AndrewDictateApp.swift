@@ -80,7 +80,7 @@ struct AndrewDictateApp: App {
     @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self)
     private var lifecycleDelegate
 
-    /// the badge carries hue and corner and nothing else. voiceover gets the
+    /// the icon carries hue and corner and nothing else. voiceover gets the
     /// sentence: what the meeting is doing, or the call nobody records.
     private var menuBarLabel: String {
         if coordinator.needsAttention {
@@ -107,11 +107,9 @@ struct AndrewDictateApp: App {
                 updateHandOff: updateHandOff
             )
         } label: {
-            // the badge wears what the coordinator says it is: a take, a
-            // meeting's rim, a call nobody records, or a setup gap.
-            Image(
-                nsImage: MenuBarBrandIcon.image(for: coordinator.badgeLook)
-            )
+            // your orb, wearing what the coordinator says it is: a take, a
+            // meeting's ring, a call nobody records, or a setup gap.
+            MenuBarIcon(coordinator: coordinator, settings: coordinator.settings)
             .accessibilityLabel(menuBarLabel)
             #if DEBUG
             .background(OpenSettingsAtLaunch())
