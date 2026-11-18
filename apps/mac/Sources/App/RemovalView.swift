@@ -12,44 +12,52 @@ struct RemovalView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Remove what’s on this Mac")
-                .font(.title2.weight(.semibold))
-
-            if viewModel.hasAnythingToRemove {
-                Text("Everything is ticked. Untick anything you want to keep.")
-                    .font(.body)
+            HStack(spacing: 12) {
+                IconTile(symbol: "trash", tint: .red, size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Remove what’s on this Mac")
+                        .font(.title3.weight(.semibold))
+                    Text(
+                        viewModel.hasAnythingToRemove
+                            ? "Everything is ticked. Untick anything you want to keep."
+                            : "There’s nothing left to remove."
+                    )
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-            } else {
-                Text("There’s nothing left to remove.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+                }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(viewModel.entries) { entry in
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(viewModel.entries.enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 {
+                        Divider().padding(.leading, 26)
+                    }
                     RemovalRow(
                         entry: entry,
                         sizeText: viewModel.sizeText(for: entry),
                         isOn: viewModel.selection.contains(entry.item),
                         toggle: { viewModel.toggle(entry.item) }
                     )
+                    .padding(.vertical, 8)
                 }
             }
-            .padding(.vertical, 4)
-
-            Divider()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 2)
+            .glassModule(cornerRadius: 12)
 
             Toggle(
-                "also move Andrew Dictate to the trash",
+                "Also move Andrew Dictate to the Trash",
                 isOn: $viewModel.alsoTrashTheApp
             )
-            .font(.body)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassModule(cornerRadius: 12)
 
             // The one thing the app genuinely cannot do for you. Saying so
             // beats letting someone believe "no traces" covered it.
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("macOS keeps the microphone and Accessibility permissions.")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("Open Privacy & Security…") {
                     NSWorkspace.shared.open(
@@ -60,8 +68,8 @@ struct RemovalView: View {
                     )
                 }
                 .buttonStyle(.link)
-                .font(.caption)
             }
+            .font(.caption)
 
             if let outcome = viewModel.outcome {
                 Text(outcome.capitalizedFirst)
@@ -92,7 +100,7 @@ struct RemovalView: View {
             HStack {
                 Text(
                     viewModel.selectedBytes > 0
-                        ? "frees \(viewModel.selectedSizeText)"
+                        ? "Frees \(viewModel.selectedSizeText)"
                         : " "
                 )
                 .font(.caption)
@@ -101,16 +109,19 @@ struct RemovalView: View {
                 Spacer()
 
                 Button("Cancel") { dismiss() }
+                    .buttonStyle(.glass)
                     .keyboardShortcut(.cancelAction)
                     .disabled(isWorking)
 
-                Button("Remove") { remove() }
+                Button("Remove", role: .destructive) { remove() }
                     .buttonStyle(.glassProminent)
+                    .tint(.red)
                     .disabled(viewModel.selection.isEmpty || isWorking)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        .tint(AppLook.accent)
         .onAppear { viewModel.reload() }
     }
 
@@ -178,7 +189,7 @@ private struct RemovalRow: View {
 
             Spacer(minLength: 8)
 
-            Text(sizeText)
+            Text(sizeText.capitalizedFirst)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
         }

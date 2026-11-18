@@ -86,7 +86,7 @@ struct TonePadView: View {
         .onKeyPress(.upArrow) { move(length: -1) }
         .onKeyPress(.downArrow) { move(length: 1) }
         .accessibilityElement()
-        .accessibilityLabel("tone")
+        .accessibilityLabel("Tone")
         .accessibilityValue(tone.summary)
         .accessibilityAdjustableAction { direction in
             switch direction {
