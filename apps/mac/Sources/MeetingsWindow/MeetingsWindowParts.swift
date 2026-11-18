@@ -33,11 +33,19 @@ enum MW {
     static let s16: CGFloat = 16
     static let s24: CGFloat = 24
 
-    static let recordingRed = Color(red: 1, green: 0.271, blue: 0.227)
+    /// the system's red: the one colour that means a mic is open.
+    static let recordingRed = Color.red
 
-    /// the motion that moves things in and out of the bar and the panes.
-    static let barSpring = Animation.spring(response: 0.45, dampingFraction: 0.82)
-    static let morphSpring = Animation.spring(response: 0.35, dampingFraction: 0.7)
+    /// the motion that moves things in and out of the bar and the panes:
+    /// a quick ease-out, so nothing lingers on its way in.
+    static let barSpring = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.3)
+    static let morphSpring = Animation.spring(duration: 0.3, bounce: 0.12)
+
+    /// a label as macOS writes it: its first letter a capital, the rest as
+    /// given (a name stays the name it was typed as).
+    static func capitalized(_ text: String) -> String {
+        text.prefix(1).uppercased() + text.dropFirst()
+    }
 
     static func copy(_ text: String) {
         let board = NSPasteboard.general
@@ -50,18 +58,13 @@ enum MW {
     }
 }
 
-/// who said it: `you` is the brand gold, everyone else cycles four colours
-/// that sit well on the dark glass.
+/// who said it: `you` is the Mac's accent, everyone else cycles four system
+/// colours, which keep their contrast in Light and in Dark.
 enum SpeakerInk {
-    static let others: [Color] = [
-        Color(red: 0.498, green: 0.714, blue: 1),
-        Color(red: 0.616, green: 0.878, blue: 0.659),
-        Color(red: 1, green: 0.620, blue: 0.541),
-        Color(red: 0.788, green: 0.655, blue: 1),
-    ]
+    static let others: [Color] = [.teal, .orange, .pink, .purple]
 
     static func color(_ colour: Int?) -> Color {
-        guard let colour else { return BrandUI.gold }
+        guard let colour else { return AppLook.accent }
         return others[colour % others.count]
     }
 }
@@ -99,17 +102,18 @@ struct MWIconLabel: View {
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(tint ?? (isHovering ? BrandUI.textPrimary : BrandUI.textSecondary))
+            .foregroundStyle(tint.map(AnyShapeStyle.init)
+                ?? (isHovering ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)))
             .frame(width: 28, height: 28)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(isHovering ? 0.08 : 0))
+                    .fill(.primary.opacity(isHovering ? 0.08 : 0))
             }
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
-/// copy, then a gold check for a moment: the one sign it worked.
+/// copy, then a green check for a moment: the one sign it worked.
 struct MWCopyButton: View {
     let help: String
     var isDisabled = false
@@ -121,7 +125,7 @@ struct MWCopyButton: View {
     var body: some View {
         MWIconButton(
             symbol: copied ? "checkmark" : "doc.on.doc", help: help, isDisabled: isDisabled,
-            tint: copied ? BrandUI.gold : nil
+            tint: copied ? .green : nil
         ) {
             MW.copy(text())
             copied = true
@@ -136,42 +140,14 @@ struct MWCopyButton: View {
     }
 }
 
-/// the one loud button: a gold capsule.
-struct MWGoldButton: View {
-    let title: String
-    var symbol: String?
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let symbol {
-                    Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
-                }
-                Text(title).font(.system(size: 12, weight: .semibold))
-            }
-            .foregroundStyle(BrandUI.windowBg)
-            .padding(.horizontal, MW.s16)
-            .frame(height: 32)
-            .background {
-                Capsule().fill(isHovering ? BrandUI.goldPale : BrandUI.gold)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
-    }
-}
-
 // MARK: - motion
 
 /// an arc going round: working on it, and no promise how long.
 struct MWSpinner: View {
     var size: CGFloat = 14
     var lineWidth: CGFloat = 2
-    var color: Color = BrandUI.gold
+    /// the window's tint (the Mac's accent) unless told otherwise.
+    var color: Color?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var angle = 0.0
@@ -179,7 +155,7 @@ struct MWSpinner: View {
     var body: some View {
         Circle()
             .trim(from: 0, to: 0.28)
-            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            .stroke(color.map(AnyShapeStyle.init) ?? AnyShapeStyle(.tint), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             .frame(width: size, height: size)
             .rotationEffect(.degrees(angle))
             .onAppear {
@@ -190,7 +166,7 @@ struct MWSpinner: View {
                     angle = 360
                 }
             }
-            .accessibilityLabel("working")
+            .accessibilityLabel("Working")
     }
 }
 
@@ -260,36 +236,38 @@ struct MWSkeleton: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .mwShimmer()
         .accessibilityElement()
-        .accessibilityLabel("writing the notes")
+        .accessibilityLabel("Writing the notes")
     }
 
     private func bar(width: CGFloat, height: CGFloat) -> some View {
         GeometryReader { proxy in
             RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(.primary.opacity(0.07))
                 .frame(width: proxy.size.width * width, height: height)
         }
         .frame(height: height)
     }
 }
 
-/// a card with the window's own hairline, for the pane states.
+/// a rounded module for the pane states (`glassModule`), or a faint wash of
+/// `tint` when it carries a warning.
 struct MWCard<Content: View>: View {
     var tint: Color?
     @ViewBuilder var content: Content
 
+    @ViewBuilder
     var body: some View {
-        content
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let card = content
             .padding(MW.s16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(tint.map { $0.opacity(0.10) } ?? BrandUI.cardBg)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(tint.map { $0.opacity(0.35) } ?? BrandUI.hairline, lineWidth: 1)
-            }
+        if let tint {
+            card
+                .background(shape.fill(tint.opacity(0.10)))
+                .overlay(shape.strokeBorder(tint.opacity(0.28), lineWidth: 0.5))
+        } else {
+            card.glassModule(cornerRadius: 14)
+        }
     }
 }
 
@@ -300,12 +278,13 @@ struct MWPaneHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: MW.s8) {
-            BrandSectionHeader(title)
+            Text(MW.capitalized(title))
+                .font(.headline)
             Spacer(minLength: MW.s8)
             trailing
         }
-        .padding(.horizontal, MW.s16)
-        .frame(height: 40)
+        .padding(.horizontal, MW.s24)
+        .frame(height: 44)
     }
 }
 

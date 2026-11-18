@@ -20,11 +20,15 @@ final class MeetingsWindowController: NSWindowController, NSWindowDelegate {
         // the window's size is the window's: the content does not get to
         // resize it.
         hosting.sizingOptions = []
+        // the views' toolbar (the meeting's actions, the sidebar's search)
+        // is the window's toolbar.
+        hosting.sceneBridgingOptions = [.toolbars]
         let window = NSWindow(contentViewController: hosting)
-        window.title = "meetings"
+        window.title = "Meetings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         // a window like any other: the red button and ⌘W close it, and it
         // is neither floating nor hidden when the app is not active.
@@ -39,7 +43,6 @@ final class MeetingsWindowController: NSWindowController, NSWindowDelegate {
         // other people's words: out of every capture, always. you see it;
         // they do not.
         window.sharingType = CaptureExclusion.sharingType(hidden: true)
-        window.backgroundColor = BrandUI.nsColor(BrandUI.windowBgRGB)
         // the saved frame wins; the middle of the screen is only where it
         // starts life.
         if !window.setFrameUsingName(Self.autosaveName) {

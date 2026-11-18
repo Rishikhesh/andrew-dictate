@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// the list of meetings: a search field, then what is being recorded, then
-/// today, yesterday, this week and earlier. rows are drawn by hand rather
-/// than by a List so the selection, the hover and the gold flash are the
-/// brand's, and so the arrow keys and the scroll are ours to keep honest.
+/// the list of meetings: the sidebar's own search field, then what is being
+/// recorded, then today, yesterday, this week and earlier. rows are drawn by
+/// hand rather than by a List so the selection is the Mac's accent pill (as
+/// in settings) whatever the app's own accent, and so the arrow keys and the
+/// scroll are ours to keep honest.
 struct MeetingsSidebar: View {
     @ObservedObject var state: MeetingsWindowState
     @ObservedObject var library: MeetingsLibraryModel
@@ -18,10 +19,10 @@ struct MeetingsSidebar: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            searchField
-            content
-        }
+        content
+        .searchable(text: $searchText, placement: .sidebar, prompt: "Search")
+        .searchFocused($searchFocused)
+        .onSubmit(of: .search) { listFocused = true }
         .background {
             // ⌘⇧F: the search field. plain ⌘F is the transcript's.
             Button("") { searchFocused = true }
@@ -40,48 +41,6 @@ struct MeetingsSidebar: View {
         }
     }
 
-    // MARK: - search
-
-    private var searchField: some View {
-        HStack(spacing: MW.s8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(BrandUI.textSecondary)
-            TextField("search meetings", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.textPrimary)
-                .focused($searchFocused)
-                .onSubmit { listFocused = true }
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(BrandUI.textSecondary)
-                }
-                .buttonStyle(.plain)
-                .help("clear search")
-                .accessibilityLabel("clear search")
-            }
-        }
-        .padding(.horizontal, MW.s12)
-        .frame(height: 32)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(BrandUI.gold.opacity(searchFocused ? 0.45 : 0), lineWidth: 1)
-        }
-        .padding(.horizontal, MW.s12)
-        .padding(.top, MW.s8)
-        .padding(.bottom, MW.s8)
-        .animation(.easeOut(duration: 0.15), value: searchFocused)
-    }
-
     // MARK: - the list
 
     @ViewBuilder
@@ -89,9 +48,9 @@ struct MeetingsSidebar: View {
         if library.isSearching, library.sections.isEmpty {
             noResults
         } else if library.sections.isEmpty, !showsRecordingRow {
-            Text(library.hasLoaded ? "no meetings yet" : "")
-                .font(.system(size: 12))
-                .foregroundStyle(BrandUI.textSecondary)
+            Text(library.hasLoaded ? "No meetings yet" : "")
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             list
@@ -99,18 +58,12 @@ struct MeetingsSidebar: View {
     }
 
     private var noResults: some View {
-        VStack(spacing: MW.s12) {
-            Text("no meetings match “\(library.trimmedQuery)”")
-                .font(.system(size: 12))
-                .foregroundStyle(BrandUI.textSecondary)
-                .multilineTextAlignment(.center)
-            Button("clear search") { searchText = "" }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(BrandUI.gold)
+        ContentUnavailableView {
+            Label("No meetings match “\(library.trimmedQuery)”", systemImage: "magnifyingglass")
+        } actions: {
+            Button("Clear Search") { searchText = "" }
+                .buttonStyle(.glass)
         }
-        .padding(.horizontal, MW.s24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var order: [MeetingsLibraryModel.Selection] {
@@ -122,11 +75,10 @@ struct MeetingsSidebar: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
                     if showsRecordingRow {
-                        header("recording", first: true)
+                        header("Recording", first: true)
                         RecordingRow(
                             state: state,
-                            isSelected: library.selection == .recording,
-                            showsFocus: listFocused
+                            isSelected: library.selection == .recording
                         )
                         .id(MeetingsLibraryModel.Selection.recording)
                         .onTapGesture { choose(.recording) }
@@ -135,13 +87,13 @@ struct MeetingsSidebar: View {
                         .accessibilityAction { choose(.recording) }
                     }
                     ForEach(Array(library.sections.enumerated()), id: \.element.id) { index, section in
-                        header(section.group.title, first: index == 0 && !showsRecordingRow)
+                        header(MW.capitalized(section.group.title), first: index == 0 && !showsRecordingRow)
                         ForEach(section.items) { item in
                             row(item, group: section.group)
                         }
                     }
                 }
-                .padding(.horizontal, MW.s8)
+                .padding(.horizontal, 10)
                 .padding(.bottom, MW.s16)
             }
             .scrollIndicators(.never)
@@ -165,10 +117,13 @@ struct MeetingsSidebar: View {
     }
 
     private func header(_ title: String, first: Bool) -> some View {
-        BrandSectionHeader(title)
-            .padding(.leading, MW.s12)
-            .padding(.top, first ? MW.s8 : MW.s16)
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.leading, 10)
+            .padding(.top, first ? 4 : MW.s16)
             .padding(.bottom, 2)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func row(_ item: MeetingsLibraryModel.Item, group: MeetingsLibraryModel.Group) -> some View {
@@ -179,8 +134,7 @@ struct MeetingsSidebar: View {
             isSelected: library.selection == .meeting(url),
             isRecording: state.recordingInto == url && state.phase != .idle,
             isSummarizing: summaries.state(for: url) == .summarizing,
-            flashes: state.flash == url,
-            showsFocus: listFocused
+            flashes: state.flash == url
         )
         .id(MeetingsLibraryModel.Selection.meeting(url))
         .onTapGesture { choose(.meeting(url)) }
@@ -190,15 +144,15 @@ struct MeetingsSidebar: View {
         // a click is a tap; voiceover's press, and the context menu's lines,
         // are these.
         .accessibilityAction { choose(.meeting(url)) }
-        .accessibilityAction(named: "record into this meeting") {
+        .accessibilityAction(named: "Record into this meeting") {
             if !state.isBusy { state.record(into: url) }
         }
-        .accessibilityAction(named: "rename") {
+        .accessibilityAction(named: "Rename") {
             library.selection = .meeting(url)
             state.renameRequest = url
         }
-        .accessibilityAction(named: "show in finder") { state.revealInFinder(url) }
-        .accessibilityAction(named: "delete") { state.pendingDelete = url }
+        .accessibilityAction(named: "Show in Finder") { state.revealInFinder(url) }
+        .accessibilityAction(named: "Delete") { state.pendingDelete = url }
     }
 
     private func choose(_ selection: MeetingsLibraryModel.Selection) {
@@ -217,7 +171,7 @@ struct MeetingsSidebar: View {
 
 // MARK: - rows
 
-/// how a row says when: `today · 9:30`, `thu · 14:02`, `16 oct · 09:30`.
+/// how a row says when: `Today · 9:30`, `Thu · 14:02`, `16 Oct · 09:30`.
 @MainActor
 enum SidebarWhen {
     static func label(
@@ -226,14 +180,14 @@ enum SidebarWhen {
     ) -> String {
         let day: String
         switch group {
-        case .today: day = "today"
-        case .yesterday: day = "yesterday"
+        case .today: day = "Today"
+        case .yesterday: day = "Yesterday"
         case .thisWeek: day = format(date, "EEE", calendar, locale)
         case .earlier:
             let sameYear = calendar.isDate(date, equalTo: now, toGranularity: .year)
             day = format(date, sameYear ? "d MMM" : "d MMM yyyy", calendar, locale)
         }
-        return "\(day) · \(format(date, "jmm", calendar, locale))".lowercased()
+        return "\(day) · \(format(date, "jmm", calendar, locale))"
     }
 
     private static func format(
@@ -243,6 +197,79 @@ enum SidebarWhen {
     }
 }
 
+/// a row's surface: the Mac's accent pill when chosen (white words on it,
+/// as in settings and Finder), a faint wash under the pointer, nothing at
+/// rest. in a window that is not in front the pill goes grey, as a
+/// sidebar's does.
+private struct RowSurface: ViewModifier {
+    let isSelected: Bool
+    var flashes = false
+
+    @Environment(\.appearsActive) private var appearsActive
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+    @State private var glow = 0.0
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+    }
+
+    private var isLit: Bool { isSelected && appearsActive }
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 10)
+            .frame(height: 62)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .foregroundStyle(isLit ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+            .environment(\.rowIsLit, isLit)
+            .background {
+                if isSelected {
+                    shape.fill(appearsActive ? AnyShapeStyle(AppLook.accent) : AnyShapeStyle(.primary.opacity(0.1)))
+                } else {
+                    shape.fill(.primary.opacity(isHovering ? 0.05 : 0))
+                }
+            }
+            .overlay {
+                // the meeting just saved says so once, in the accent.
+                shape.fill(AppLook.accent.opacity(glow)).allowsHitTesting(false)
+            }
+            .contentShape(shape)
+            .onHover { isHovering = $0 }
+            .onChange(of: flashes, initial: true) { _, now in
+                guard now, !reduceMotion else { return }
+                glow = 0.3
+                withAnimation(.easeOut(duration: 1.1)) { glow = 0 }
+            }
+            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .animation(.easeOut(duration: 0.15), value: isSelected)
+    }
+}
+
+private extension EnvironmentValues {
+    /// the row sits on the accent pill: its quieter words go white too.
+    @Entry var rowIsLit = false
+}
+
+/// a row's second and third lines: secondary on the sidebar, a softer white
+/// on the accent pill.
+private struct RowQuiet: ViewModifier {
+    var level = 1
+    @Environment(\.rowIsLit) private var isLit
+
+    func body(content: Content) -> some View {
+        if isLit {
+            content.foregroundStyle(.white.opacity(level == 1 ? 0.85 : 0.7))
+        } else {
+            content.foregroundStyle(level == 1 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
+        }
+    }
+}
+
+private extension View {
+    func rowQuiet(_ level: Int = 1) -> some View { modifier(RowQuiet(level: level)) }
+}
+
 private struct SidebarRow: View {
     let item: MeetingsLibraryModel.Item
     let group: MeetingsLibraryModel.Group
@@ -250,30 +277,24 @@ private struct SidebarRow: View {
     let isRecording: Bool
     let isSummarizing: Bool
     let flashes: Bool
-    /// the list has the keyboard: the selected row says so, since the
-    /// list's own focus ring is off.
-    let showsFocus: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-    @State private var glow = 0.0
+    @Environment(\.appearsActive) private var appearsActive
+    /// on the accent pill (`RowSurface`), where its marks go white.
+    private var isLit: Bool { isSelected && appearsActive }
 
     private var entry: MeetingsLibraryModel.Entry { item.entry }
 
     var body: some View {
         HStack(alignment: .top, spacing: MW.s8) {
-            status
-                .frame(width: 10, height: 18)
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: MW.s8) {
+                HStack(spacing: 6) {
+                    status
                     Text(entry.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(BrandUI.textPrimary)
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     Text(entry.summary.duration.runningClock)
-                        .font(BrandUI.machineFont(size: 11))
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .font(.caption.monospacedDigit())
+                        .rowQuiet()
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -284,63 +305,35 @@ private struct SidebarRow: View {
                     .frame(height: 14)
             }
         }
-        .padding(.horizontal, 10)
-        .frame(height: 62)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? BrandUI.cardBg : Color.white.opacity(isHovering ? 0.04 : 0))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    BrandUI.gold.opacity(isSelected ? (showsFocus ? 0.7 : 0.25) : 0),
-                    lineWidth: isSelected && showsFocus ? 1.5 : 1)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(BrandUI.gold.opacity(glow))
-                .allowsHitTesting(false)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .onHover { isHovering = $0 }
-        .onChange(of: flashes, initial: true) { _, now in
-            guard now, !reduceMotion else { return }
-            glow = 0.34
-            withAnimation(.easeOut(duration: 1.1)) { glow = 0 }
-        }
-        .animation(.easeOut(duration: 0.12), value: isHovering)
-        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .modifier(RowSurface(isSelected: isSelected, flashes: flashes))
     }
 
     @ViewBuilder
     private var status: some View {
         if isRecording {
-            PulsingRecordDot(size: 6)
+            PulsingRecordDot(size: 7)
         } else if isSummarizing {
-            MWSpinner(size: 10, lineWidth: 1.5)
-        } else {
-            Color.clear
+            MWSpinner(size: 10, lineWidth: 1.5, color: isLit ? .white : nil)
         }
     }
 
     private var meta: some View {
         HStack(spacing: MW.s8) {
             Text(SidebarWhen.label(entry.summary.started, group: group))
-                .font(.system(size: 11))
-                .foregroundStyle(BrandUI.textSecondary)
+                .font(.caption)
+                .rowQuiet()
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
             SpeakerDots(speakers: entry.speakers)
             if entry.summary.sessions > 1 {
                 Text("\(entry.summary.sessions) sessions")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(BrandUI.gold)
+                    .font(.caption2.weight(.medium))
+                    .rowQuiet()
                     .lineLimit(1)
                     .fixedSize()
                     .padding(.horizontal, 6)
                     .frame(height: 16)
-                    .background(Capsule().fill(BrandUI.gold.opacity(0.14)))
+                    .background(Capsule().fill(.primary.opacity(0.08)))
             }
             Spacer(minLength: 0)
         }
@@ -351,46 +344,45 @@ private struct SidebarRow: View {
         if isSummarizing {
             GeometryReader { proxy in
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.white.opacity(0.10))
+                    .fill(.primary.opacity(0.1))
                     .frame(width: proxy.size.width * 0.6, height: 6)
                     .mwShimmer()
                     .frame(maxHeight: .infinity)
             }
         } else {
             Text(line)
-                .font(.system(size: 11))
-                .foregroundStyle(BrandUI.textPrimary.opacity(0.45))
+                .font(.caption)
+                .rowQuiet(2)
                 .lineLimit(1)
         }
     }
 
     private var line: String {
         if let hit = item.hit { return hit }
-        if !entry.hasWords { return "nobody spoke" }
+        if !entry.hasWords { return "Nobody spoke" }
         return entry.snippet
     }
 }
 
-/// up to three overlapping dots in the speakers' colours, then how many more.
+/// up to three dots in the speakers' colours, then how many more.
 private struct SpeakerDots: View {
     let speakers: [String]
 
     var body: some View {
         if !speakers.isEmpty {
             HStack(spacing: 4) {
-                HStack(spacing: -4) {
+                HStack(spacing: 3) {
                     ForEach(Array(speakers.prefix(3).enumerated()), id: \.offset) { _, speaker in
                         Circle()
                             .fill(SpeakerInk.color(
                                 MeetingTranscriptBlocks.colour(of: speaker, in: speakers)))
-                            .frame(width: 12, height: 12)
-                            .overlay(Circle().stroke(BrandUI.windowBg, lineWidth: 1.5))
+                            .frame(width: 7, height: 7)
                     }
                 }
                 if speakers.count > 3 {
                     Text("+\(speakers.count - 3)")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(BrandUI.textSecondary)
+                        .font(.caption2.weight(.medium))
+                        .rowQuiet()
                 }
             }
             .accessibilityElement(children: .ignore)
@@ -401,33 +393,27 @@ private struct SpeakerDots: View {
     }
 }
 
-/// a red dot with a ring that goes out from it: something is being heard.
+/// a red dot that breathes, slowly: something is being heard. still, and
+/// fully lit, when the Mac is asked for less motion.
 struct PulsingRecordDot: View {
     var size: CGFloat = 10
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulsing = false
+    @State private var breathing = false
 
     var body: some View {
-        ZStack {
-            if !reduceMotion {
-                Circle()
-                    .stroke(MW.recordingRed, lineWidth: 1.5)
-                    .frame(width: size, height: size)
-                    .scaleEffect(pulsing ? 2.2 : 1)
-                    .opacity(pulsing ? 0 : 0.5)
+        Circle()
+            .fill(MW.recordingRed)
+            .frame(width: size, height: size)
+            .shadow(color: MW.recordingRed.opacity(breathing ? 0.15 : 0.5), radius: size * 0.4)
+            .opacity(breathing ? 0.45 : 1)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    breathing = true
+                }
             }
-            Circle()
-                .fill(MW.recordingRed)
-                .frame(width: size, height: size)
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
-                pulsing = true
-            }
-        }
-        .accessibilityLabel("recording")
+            .accessibilityLabel("Recording")
     }
 }
 
@@ -435,9 +421,9 @@ struct PulsingRecordDot: View {
 private struct RecordingRow: View {
     @ObservedObject var state: MeetingsWindowState
     let isSelected: Bool
-    let showsFocus: Bool
-
-    @State private var isHovering = false
+    @Environment(\.appearsActive) private var appearsActive
+    /// on the accent pill (`RowSurface`), where its marks go white.
+    private var isLit: Bool { isSelected && appearsActive }
 
     private var title: String {
         if let typed = state.recordingTitle { return typed }
@@ -447,58 +433,47 @@ private struct RecordingRow: View {
     private var phaseLine: String {
         switch state.phase {
         case .idle: ""
-        case .gettingReady: "getting ready…"
-        case .recording: "recording"
-        case .problem: state.phase.menuLine(elapsed: .zero) ?? "recording"
-        case .writingOut: "writing it out…"
+        case .gettingReady: "Getting ready…"
+        case .recording: "Recording"
+        case .problem: (state.phase.menuLine(elapsed: .zero) ?? "recording").capitalizedFirst
+        case .writingOut: "Writing it out…"
         }
     }
 
+    private var isProblem: Bool {
+        if case .problem = state.phase { return true }
+        return false
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: MW.s8) {
-            PulsingRecordDot(size: 6)
-                .frame(width: 10, height: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: MW.s8) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(BrandUI.textPrimary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                        Text(state.coordinator.meetings.elapsed.runningClock)
-                            .font(BrandUI.machineFont(size: 11))
-                            .foregroundStyle(BrandUI.textSecondary)
-                            .fixedSize()
-                    }
-                }
-                .frame(height: 18)
-                Text(phaseLine)
-                    .font(.system(size: 11))
-                    .foregroundStyle({
-                        if case .problem = state.phase { return BrandUI.attention }
-                        return BrandUI.textSecondary
-                    }())
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                PulsingRecordDot(size: 7)
+                Text(title)
+                    .font(.body.weight(.semibold))
                     .lineLimit(1)
-                    .frame(height: 16)
-                Color.clear.frame(height: 14)
+                Spacer(minLength: 0)
+                TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                    Text(state.coordinator.meetings.elapsed.runningClock)
+                        .font(.caption.monospacedDigit())
+                        .rowQuiet()
+                        .fixedSize()
+                }
             }
+            .frame(height: 18)
+            Group {
+                if isProblem {
+                    Text(phaseLine).foregroundStyle(isLit ? .white : .orange)
+                } else {
+                    Text(phaseLine).rowQuiet()
+                }
+            }
+            .font(.caption)
+            .lineLimit(1)
+            .frame(height: 16)
+            Color.clear.frame(height: 14)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 62)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? BrandUI.cardBg : Color.white.opacity(isHovering ? 0.04 : 0))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(
-                    BrandUI.gold.opacity(isSelected ? (showsFocus ? 0.7 : 0.25) : 0),
-                    lineWidth: isSelected && showsFocus ? 1.5 : 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .onHover { isHovering = $0 }
+        .modifier(RowSurface(isSelected: isSelected))
     }
 }
 
@@ -515,33 +490,33 @@ struct MeetingMenuItems: View {
     private var busy: Bool { summaries.state(for: entry.id) == .summarizing }
 
     var body: some View {
-        Button("record into this meeting") { state.record(into: entry.id) }
+        Button("Record into This Meeting") { state.record(into: entry.id) }
             .disabled(state.isBusy)
-        Button("rename") {
+        Button("Rename") {
             library.selection = .meeting(entry.id)
             state.renameRequest = entry.id
         }
-        Menu("summarize again") {
+        Menu("Summarize Again") {
             ForEach(MeetingTemplate.builtIn) { template in
                 Button {
                     state.summarize(entry.id, templateID: template.id)
                 } label: {
-                    Label(template.name, systemImage: template.symbol)
+                    Label(MW.capitalized(template.name), systemImage: template.symbol)
                 }
             }
         }
         .disabled(busy || !entry.hasWords)
         Divider()
-        Button("copy summary") {
+        Button("Copy Summary") {
             if let notes = document?.summary { MW.copy(notes) }
         }
         .disabled(document?.summary == nil)
-        Button("copy transcript") {
+        Button("Copy Transcript") {
             if let document { MW.copy(document.transcriptText) }
         }
         .disabled(document == nil || !entry.hasWords)
         Divider()
-        Button("show in finder") { state.revealInFinder(entry.id) }
-        Button("delete…", role: .destructive) { state.pendingDelete = entry.id }
+        Button("Show in Finder") { state.revealInFinder(entry.id) }
+        Button("Delete…", role: .destructive) { state.pendingDelete = entry.id }
     }
 }
