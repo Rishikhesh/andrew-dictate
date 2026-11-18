@@ -70,19 +70,26 @@ struct MenuBarIcon: View {
             .onChange(of: look == .dictating, initial: true) { _, live in
                 clock.run(live, speed: MenuBarBrandIcon.speed(settings.listeningOrb))
             }
+            .onChange(of: settings.listeningOrb) { _, orb in
+                clock.run(look == .dictating, speed: MenuBarBrandIcon.speed(orb))
+            }
     }
 }
 
-/// the orb's clock in the menu bar: 15 frames a second while you talk,
-/// nothing at all otherwise. it stops where it is, so the still frame
-/// after a take is the last one you saw, never a jump. with Reduce Motion
-/// it never runs.
+/// the orb's clock in the menu bar: it always moves. at rest it drifts
+/// slowly at a few frames a second, so it costs next to nothing; while you
+/// talk it runs at full pace, 15 frames a second. the change of pace keeps
+/// the time it is at, so there is never a jump. with Reduce Motion it
+/// holds still.
 @MainActor
 final class MenuBarOrbClock: ObservableObject {
     /// a frame each orb shows well at rest.
     @Published private(set) var time: Double = 1.2
 
     private static let framesPerSecond: Double = 15
+    /// at rest: slow and cheap, but never still.
+    private static let restFramesPerSecond: Double = 8
+    private static let restPace: Double = 0.35
     private var timer: Timer?
     private var lastTick = Date()
     private var speed: Double = 1
@@ -90,16 +97,19 @@ final class MenuBarOrbClock: ObservableObject {
     func run(_ live: Bool, speed: Double) {
         timer?.invalidate()
         timer = nil
-        guard live, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             return
         }
-        self.speed = speed
+        self.speed = live ? speed : speed * Self.restPace
         lastTick = Date()
-        let timer = Timer(timeInterval: 1 / Self.framesPerSecond, repeats: true) { [weak self] _ in
+        let fps = live ? Self.framesPerSecond : Self.restFramesPerSecond
+        let timer = Timer(timeInterval: 1 / fps, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.tick()
             }
         }
+        // lets macOS batch the wake-ups with others, which saves power.
+        timer.tolerance = 0.3 / fps
         // .common, so it keeps going while the panel is open.
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
