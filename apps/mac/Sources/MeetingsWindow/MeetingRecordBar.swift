@@ -38,25 +38,23 @@ struct MeetingRecordBar: View {
             }
             controls
         }
-        .padding(.horizontal, MW.s16)
-        .frame(height: 72)
+        .padding(.leading, 14)
+        .padding(.trailing, MW.s16)
+        .frame(height: 68)
         .frame(maxWidth: .infinity)
-        .overlay {
-            // a faint red along the top edge while the mic is open.
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+        .background {
+            // a faint red wash from the top while the mic is open.
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(LinearGradient(
-                    colors: [MW.recordingRed.opacity(0.08), .clear],
-                    startPoint: .top, endPoint: .center))
+                    colors: [MW.recordingRed.opacity(0.10), .clear],
+                    startPoint: .top, endPoint: .bottom))
                 .opacity(face == .recording || face == .problem ? 1 : 0)
                 .allowsHitTesting(false)
         }
-        .glassEffect(.regular.tint(.black.opacity(0.3)), in: .rect(cornerRadius: 22))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(BrandUI.gold.opacity(0.12), lineWidth: 1)
-        }
-        .padding(.horizontal, MW.s12)
-        .padding(.bottom, MW.s12)
+        // one floating piece of Liquid Glass, like the Mac's own controls.
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .padding(.horizontal, MW.s16)
+        .padding(.bottom, MW.s16)
         .animation(MW.animation(MW.barSpring, reduceMotion: reduceMotion), value: face)
     }
 
@@ -78,20 +76,20 @@ struct MeetingRecordBar: View {
             .transition(.asymmetric(insertion: .identity, removal: .identity))
         case .gettingReady:
             HStack(spacing: MW.s16) {
-                Text("getting ready…")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text("Getting ready…")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.secondary)
                     .mwAppear(0)
                 Spacer(minLength: 0)
             }
         case .recording, .problem:
             HStack(spacing: MW.s16) {
                 PulsingRecordDot(size: 10).frame(width: 10, height: 10).mwAppear(0)
-                RecordingClock(state: state, color: BrandUI.textPrimary).mwAppear(1)
+                RecordingClock(state: state, color: .primary).mwAppear(1)
                 if case let .problem(problem) = state.phase {
-                    Text(MeetingEvent.problemBegan(problem).hudText ?? "something is wrong")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(BrandUI.attention)
+                    Text((MeetingEvent.problemBegan(problem).hudText ?? "something is wrong").capitalizedFirst)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.orange)
                         .lineLimit(2)
                         .layoutPriority(2)
                         .mwAppear(2)
@@ -104,10 +102,10 @@ struct MeetingRecordBar: View {
             }
         case .writingOut:
             HStack(spacing: MW.s16) {
-                RecordingClock(state: state, color: BrandUI.goldPale).mwAppear(0)
-                Text("writing it out…")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(BrandUI.textSecondary)
+                RecordingClock(state: state, color: .secondary).mwAppear(0)
+                Text("Writing it out…")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.secondary)
                     .mwAppear(1)
                 Spacer(minLength: 0)
             }
@@ -121,16 +119,16 @@ struct MeetingRecordBar: View {
         if let saved = state.lastSaved, summaries.state(for: saved) == .summarizing {
             HStack(spacing: 6) {
                 MWSpinner(size: 12, lineWidth: 1.5)
-                Text("summarizing…")
-                    .font(.system(size: 12))
-                    .foregroundStyle(BrandUI.gold)
+                Text("Summarizing…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             .fixedSize()
         } else {
             HStack(spacing: MW.s8) {
-                SourceChip(symbol: "mic.fill", label: "mic", isWrong: false)
+                SourceChip(symbol: "mic.fill", label: "Mic", isWrong: false)
                 SourceChip(
-                    symbol: "speaker.wave.2.fill", label: "mac audio",
+                    symbol: "speaker.wave.2.fill", label: "Mac audio",
                     isWrong: state.cannotHearTheMac)
             }
             .fixedSize()
@@ -143,19 +141,19 @@ struct MeetingRecordBar: View {
     private var intoChip: some View {
         if let text = chipText {
             Text(text)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(BrandUI.goldPale)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .padding(.horizontal, 10)
                 .frame(height: 24)
-                .background(Capsule().fill(BrandUI.gold.opacity(0.14)))
+                .background(Capsule().fill(.primary.opacity(0.07)))
                 .frame(maxWidth: 220)
         }
     }
 
     private var chipText: String? {
         if let into = state.recordingInto {
-            return "into \(library.entry(for: into)?.title ?? "this meeting")"
+            return "Into \(library.entry(for: into)?.title ?? "this meeting")"
         }
         return state.recordingTitle
     }
@@ -166,17 +164,16 @@ struct MeetingRecordBar: View {
         } label: {
             Image(systemName: "text.bubble")
                 .symbolVariant(state.isLiveTranscriptShown ? .fill : .none)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(state.isLiveTranscriptShown ? BrandUI.gold : BrandUI.textSecondary)
-                .frame(width: 32, height: 32)
-                .background {
-                    Circle().fill(Color.white.opacity(state.isLiveTranscriptShown ? 0.10 : 0.05))
-                }
+                .foregroundStyle(state.isLiveTranscriptShown ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 18, height: 18)
         }
-        .buttonStyle(.plain)
-        .help(state.isLiveTranscriptShown ? "hide the live transcript window" : "show the live transcript window")
-        .accessibilityLabel("live transcript window")
-        .accessibilityValue(state.isLiveTranscriptShown ? "shown" : "hidden")
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.large)
+        .help(state.isLiveTranscriptShown ? "Hide the live transcript window" : "Show the live transcript window")
+        .accessibilityLabel("Live transcript window")
+        .accessibilityValue(state.isLiveTranscriptShown ? "Shown" : "Hidden")
         .accessibilityAddTraits(state.isLiveTranscriptShown ? .isSelected : [])
     }
 }
@@ -185,8 +182,8 @@ struct MeetingRecordBar: View {
 
 /// one shape that is the record button, the stop button and the end of
 /// both: a red core that is a circle when idle and a rounded square when
-/// recording, inside a ring that is white at rest and a gold arc going round
-/// while the mic warms up or the file is written.
+/// recording, inside a ring in the window's ink at rest and an arc in the
+/// accent going round while the mic warms up or the file is written.
 private struct RecordStopButton: View {
     let face: MeetingRecordBar.Face
     let glows: Bool
@@ -218,9 +215,9 @@ private struct RecordStopButton: View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .stroke(Color.white.opacity(0.85), lineWidth: 2)
+                    .strokeBorder(.primary.opacity(0.28), lineWidth: 3)
                     .frame(width: 44, height: 44)
-                    .opacity(isWorking ? 0.18 : 1)
+                    .opacity(isWorking ? 0.5 : 1)
                 if isWorking {
                     MWSpinner(size: 44, lineWidth: 2.5)
                 }
@@ -250,10 +247,10 @@ private struct RecordStopButton: View {
 
     private var helpText: String {
         switch face {
-        case .idle: "record a meeting"
-        case .gettingReady: "getting ready"
-        case .recording, .problem: "stop recording"
-        case .writingOut: "writing it out"
+        case .idle: "Record a meeting"
+        case .gettingReady: "Getting ready"
+        case .recording, .problem: "Stop recording"
+        case .writingOut: "Writing it out"
         }
     }
 
@@ -282,7 +279,7 @@ private struct RecordingClock: View {
                 .contentTransition(.numericText())
                 .animation(.snappy(duration: 0.25), value: clock)
                 .fixedSize()
-                .accessibilityLabel("recording time")
+                .accessibilityLabel("Recording time")
                 .accessibilityValue(clock)
         }
     }
@@ -303,7 +300,7 @@ private struct LevelMeter: View {
             ForEach(0..<Self.count, id: \.self) { index in
                 let level = CGFloat(history[index])
                 Capsule()
-                    .fill(BrandUI.gold.mix(with: BrandUI.goldPale, by: Double(level)))
+                    .fill(MW.recordingRed.opacity(0.35 + 0.65 * Double(level)))
                     .frame(width: 3, height: 4 + level * 24)
             }
         }
@@ -341,7 +338,7 @@ private struct RecordIntoMenu: View {
         if case let .meeting(url) = state.target, let entry = library.entry(for: url) {
             return entry.title
         }
-        return "new meeting"
+        return "New meeting"
     }
 
     var body: some View {
@@ -350,9 +347,9 @@ private struct RecordIntoMenu: View {
                 state.target = .new
             } label: {
                 if state.target == .new {
-                    Label("new meeting", systemImage: "checkmark")
+                    Label("New Meeting", systemImage: "checkmark")
                 } else {
-                    Text("new meeting")
+                    Text("New Meeting")
                 }
             }
             if let selected {
@@ -362,34 +359,25 @@ private struct RecordIntoMenu: View {
             let recent = library.entries.filter { $0.id != selected?.id }.prefix(6)
             if !recent.isEmpty {
                 Divider()
-                Menu("recent meetings") {
+                Menu("Recent Meetings") {
                     ForEach(Array(recent)) { entry in choice(entry) }
                 }
             }
         } label: {
             HStack(spacing: 6) {
-                Text("record into")
-                    .font(.system(size: 11))
-                    .foregroundStyle(BrandUI.textSecondary)
+                Text("Record into")
+                    .foregroundStyle(.secondary)
                 Text(targetName)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(BrandUI.textPrimary)
+                    .fontWeight(.medium)
                     .lineLimit(1)
                     .frame(maxWidth: 150, alignment: .leading)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(BrandUI.textSecondary)
             }
-            .padding(.horizontal, MW.s12)
-            .frame(height: 32)
-            .background(Capsule().fill(Color.white.opacity(0.07)))
-            .fixedSize()
         }
         .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
+        .buttonStyle(.glass)
+        .controlSize(.large)
         .fixedSize()
-        .help("where the recording goes")
+        .help("Where the recording goes")
     }
 
     private func choice(_ entry: MeetingsLibraryModel.Entry) -> some View {
@@ -411,22 +399,20 @@ private struct TitleField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        TextField("name it (optional)", text: $state.newTitle)
+        TextField("Name it (optional)", text: $state.newTitle)
             .textFieldStyle(.plain)
-            .font(.system(size: 13))
-            .foregroundStyle(BrandUI.textPrimary)
             .focused($focused)
             .onSubmit { state.record() }
             .padding(.horizontal, MW.s12)
             .frame(height: 32)
             .frame(minWidth: 140, maxWidth: 260)
-            .background(Capsule().fill(Color.white.opacity(0.07)))
-            .overlay(Capsule().stroke(BrandUI.gold.opacity(focused ? 0.45 : 0), lineWidth: 1))
+            .background(Capsule().fill(.primary.opacity(0.06)))
+            .overlay(Capsule().strokeBorder(AppLook.accent.opacity(focused ? 0.6 : 0), lineWidth: 2))
             .animation(.easeOut(duration: 0.15), value: focused)
     }
 }
 
-/// what the meeting hears: the mic, and the mac. red-orange when the mac
+/// what the meeting hears: the mic, and the Mac. orange when the Mac
 /// could not be heard last time.
 private struct SourceChip: View {
     let symbol: String
@@ -435,24 +421,24 @@ private struct SourceChip: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: symbol).font(.system(size: 10))
-            Text(label).font(.system(size: 11))
+            Image(systemName: symbol).font(.caption2)
+            Text(label).font(.caption)
         }
-        .foregroundStyle(isWrong ? BrandUI.attention : BrandUI.textSecondary)
+        .foregroundStyle(isWrong ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
         .padding(.horizontal, MW.s8)
         .frame(height: 24)
-        .overlay(Capsule().stroke(isWrong ? BrandUI.attention.opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1))
-        .help(isWrong ? "the mac could not be heard last time" : "heard while recording")
+        .background(Capsule().fill(isWrong ? AnyShapeStyle(.orange.opacity(0.12)) : AnyShapeStyle(.primary.opacity(0.05))))
+        .help(isWrong ? "The Mac could not be heard last time" : "Heard while recording")
         // the colour says it to the eye; this says it to voiceover.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue(isWrong ? "could not be heard last time" : "")
+        .accessibilityValue(isWrong ? "Could not be heard last time" : "")
     }
 }
 
 // MARK: - appearing
 
-/// a control coming in as the bar changes: fades up from 90%, a beat
+/// a control coming in as the bar changes: fades up from 96%, a beat
 /// after the one before it.
 private struct Appear: ViewModifier {
     let index: Int
@@ -463,12 +449,12 @@ private struct Appear: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(shown ? 1 : 0)
-            .scaleEffect(shown ? 1 : 0.9)
+            .scaleEffect(shown ? 1 : 0.96)
             .onAppear {
                 if reduceMotion {
                     shown = true
                 } else {
-                    withAnimation(MW.barSpring.delay(Double(index) * 0.04)) { shown = true }
+                    withAnimation(MW.barSpring.delay(Double(index) * 0.03)) { shown = true }
                 }
             }
     }
