@@ -6,6 +6,10 @@ struct ListeningPane: View {
 
     var body: some View {
         Form {
+            Section {} header: {
+                SectionHero(.listening)
+            }
+
             Section {
                 OrbGrid(settings: settings)
             } header: {
@@ -29,6 +33,6 @@ struct ListeningPane: View {
                 .toggleStyle(.switch)
             }
         }
-        .formStyle(.grouped)
+        .settingsForm()
     }
 }

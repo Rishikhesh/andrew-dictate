@@ -53,22 +53,25 @@ enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         case .general: .gray
         }
     }
-}
 
-/// a sidebar row: the symbol on its coloured tile, then the title.
-struct SettingsSectionLabel: View {
-    let section: SettingsSection
-
-    var body: some View {
-        Label {
-            Text(section.title)
-        } icon: {
-            Image(systemName: section.symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
-                .background(section.tileColor.gradient, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    /// the one line under the pane's title: what the section is for.
+    var blurb: String {
+        switch self {
+        case .home: "Your words today, and how fast they land."
+        case .dictation: "Hold a key, talk, let go. Choose the key, the cleanup and the speech model."
+        case .listening: "The orb that shows Andrew hears you. It grows with your voice."
+        case .ai: "Rewrite as you dictate and summarize meetings, with the provider you pick."
+        case .meetings: "Record calls on this Mac and save transcripts where you want them."
+        case .dictionary: "Words Andrew should always get right."
+        case .history: "Everything you have dictated and recorded, searchable."
+        case .general: "Startup, updates and the version you are running."
         }
+    }
+
+    /// a little air above this row in the sidebar: home stands alone, the
+    /// meetings end the doing, general is housekeeping.
+    var startsGroup: Bool {
+        self == .dictation || self == .dictionary || self == .general
     }
 }
 

@@ -31,6 +31,10 @@ struct RewriteSettingsView: View {
 
     var body: some View {
         Form {
+            Section {} header: {
+                SectionHero(.ai)
+            }
+
             Section("Provider") {
                 providerRow
                 if settings.provider.needsModelChoice {
@@ -78,7 +82,7 @@ struct RewriteSettingsView: View {
                 privacyFootnote
             }
         }
-        .formStyle(.grouped)
+        .settingsForm()
         .onAppear {
             accounts.refresh()
             modelDraft = settings.model(for: settings.provider)

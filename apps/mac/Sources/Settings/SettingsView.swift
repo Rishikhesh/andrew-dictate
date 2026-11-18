@@ -83,37 +83,24 @@ struct SettingsView: View {
             // own highlight takes the app's gold accent, which settings
             // does not wear. arrow keys still move it.
             List {
+                SettingsSidebarIdentity(
+                    orb: settings.listeningOrb,
+                    key: settings.dictationHotkey.displayName,
+                    setupFinished: setupIssues.isEmpty
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 10, trailing: 4))
+                .listRowSeparator(.hidden)
+
                 ForEach(SettingsSection.allCases) { section in
-                    let selected = section == selectedSection
-                    Button {
+                    SettingsSidebarRow(
+                        section: section,
+                        selected: section == selectedSection,
+                        issueCount: section == .home ? setupIssues.count : 0
+                    ) {
                         selectedSection = section
-                    } label: {
-                        HStack {
-                            SettingsSectionLabel(section: section)
-                            Spacer(minLength: 4)
-                            if section == .home, !setupIssues.isEmpty {
-                                Text("\(setupIssues.count)")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 1)
-                                    .background(Capsule().fill(.red))
-                            }
-                        }
-                        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(selected ? SystemAccent.color : .clear)
-                        )
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                    .listRowInsets(EdgeInsets(top: section.startsGroup ? 16 : 2, leading: 4, bottom: 2, trailing: 4))
                     .listRowSeparator(.hidden)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
             .listStyle(.sidebar)
@@ -124,13 +111,15 @@ struct SettingsView: View {
             .onKeyPress(.downArrow) { step(1) }
             .onKeyPress(.upArrow) { step(-1) }
             .toolbar(removing: .sidebarToggle)
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 300)
         } detail: {
             detail(for: selectedSection)
                 .navigationTitle(selectedSection.title)
         }
+        // the window's glass, and its foot glows in the colour of where you are.
+        .glassWindow(glow: selectedSection.tileColor)
         .tint(SystemAccent.color)
-        .frame(minWidth: 760, idealWidth: 860, minHeight: 520, idealHeight: 620)
+        .frame(minWidth: 800, idealWidth: 940, minHeight: 560, idealHeight: 700)
         .onAppear {
             // an LSUIElement app opening its settings scene may not be the
             // active app, which would leave the window behind everything.
@@ -299,6 +288,10 @@ struct SettingsView: View {
 
     private var dictationTab: some View {
         Form {
+            Section {} header: {
+                SectionHero(.dictation)
+            }
+
             Section("Dictation key") {
                 hotkeyRow
             }
@@ -329,7 +322,7 @@ struct SettingsView: View {
                 modelFooter
             }
         }
-        .formStyle(.grouped)
+        .settingsForm()
     }
 
     private var hotkeyRow: some View {
@@ -422,6 +415,8 @@ struct SettingsView: View {
 
     private var dictionaryTab: some View {
         VStack(alignment: .leading, spacing: 10) {
+            SectionHero(.dictionary)
+
             // the pane used to open with an unlabelled grid, so the two
             // rules it already keeps — whole words, any capitalisation —
             // were things you found out by being confused.
@@ -436,8 +431,9 @@ struct SettingsView: View {
                 dictations: browser.items
             )
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
+        .frame(maxWidth: SettingsLayout.column)
+        .padding(.horizontal, 28)
+        .padding(.top, 6)
         .padding(.bottom, 20)
         // the table takes what is left of the pane, never more: on its own
         // it asks for thousands of points and pushes the intro off the top.
@@ -451,6 +447,9 @@ struct SettingsView: View {
     /// is a footer, because it's set once and never looked at again.
     private var historyTab: some View {
         VStack(alignment: .leading, spacing: 0) {
+            SectionHero(.history)
+                .padding(.top, 6)
+
             switch historySegment {
             case .dictations:
                 ArchiveBrowserView(
@@ -468,6 +467,8 @@ struct SettingsView: View {
             case .meetings: meetingsFooter
             }
         }
+        .frame(maxWidth: SettingsLayout.column + 40)
+        .frame(maxWidth: .infinity)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Show", selection: $historySegment) {
@@ -589,6 +590,10 @@ struct SettingsView: View {
 
     private var meetingsTab: some View {
         Form {
+            Section {} header: {
+                SectionHero(.meetings)
+            }
+
             Section {
                 // the same rows dictation uses: each job picks its own
                 // model, and the row states the consequence (ADR 0040).
@@ -625,7 +630,7 @@ struct SettingsView: View {
                 meetingHookRow
             }
         }
-        .formStyle(.grouped)
+        .settingsForm()
     }
 
     private var meetingsFolderRow: some View {
@@ -776,6 +781,10 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
+            Section {} header: {
+                SectionHero(.general)
+            }
+
             Section {
                 Toggle(isOn: Binding(
                     get: { loginItem.isEnabled },
@@ -823,7 +832,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .settingsForm()
     }
 
     private var appVersion: String {
