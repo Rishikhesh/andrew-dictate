@@ -2,6 +2,7 @@ import AppKit
 @preconcurrency import ApplicationServices
 import AVFoundation
 import SwiftUI
+import ThinkingOrbsKit
 
 @MainActor
 private final class OnboardingWindowResizer {
@@ -19,7 +20,10 @@ private final class OnboardingWindowResizer {
             let targetFrameSize = window.frameRect(
                 forContentRect: NSRect(
                     origin: .zero,
-                    size: NSSize(width: 460, height: contentHeight)
+                    size: NSSize(
+                        width: OnboardingView.windowWidth,
+                        height: contentHeight
+                    )
                 )
             ).size
             guard abs(currentFrame.height - targetFrameSize.height) > 0.5
@@ -104,8 +108,17 @@ final class OnboardingWindowController:
         let window = NSWindow(contentViewController: hostingController)
         resizer.window = window
         window.title = "Andrew Dictate"
-        window.styleMask = [.titled, .closable]
-        window.setContentSize(NSSize(width: 460, height: 430))
+        // a setup assistant's window: no title, the glass running up under
+        // the traffic lights.
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.setContentSize(
+            NSSize(
+                width: OnboardingView.windowWidth,
+                height: OnboardingView.windowHeight
+            )
+        )
         window.isReleasedWhenClosed = false
         window.isMovableByWindowBackground = true
         window.center()
@@ -226,16 +239,16 @@ private struct KeyTest: Equatable {
 
     func caption(for binding: HotkeyBinding) -> String {
         if fired {
-            return "got it. that key works on this keyboard."
+            return "Got it. That key works on this keyboard."
         }
         guard patienceSpent else {
-            return "press and hold it."
+            return "Press and hold it."
         }
         // the fn sentence is only true about fn: someone who rebound in
         // settings and reran setup would be told a lie.
         return binding == .fn
-            ? "nothing yet — fn only exists on apple keyboards. try another:"
-            : "nothing yet. try another key:"
+            ? "Nothing yet. fn only exists on Apple keyboards. Try another."
+            : "Nothing yet. Try another key."
     }
 }
 
@@ -243,8 +256,8 @@ struct OnboardingView: View {
     // Every screen is the same size. The window used to grow from 430 to 648
     // when setup began, moving itself under the pointer at the exact moment
     // the user was reaching for something.
-    private static let windowWidth: CGFloat = 460
-    private static let windowHeight: CGFloat = 430
+    fileprivate static let windowWidth: CGFloat = 540
+    fileprivate static let windowHeight: CGFloat = 600
 
     /// How long setup waits for the key before offering another one. A
     /// provisional number, like the dead-tap window: long enough that nobody
@@ -252,6 +265,7 @@ struct OnboardingView: View {
     private static let keyTestPatience: TimeInterval = 6
 
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @ObservedObject private var coordinator: DictationCoordinator
     @ObservedObject private var settings: AppSettings
@@ -264,6 +278,9 @@ struct OnboardingView: View {
     /// the coda row's tick. seeded from macOS's answer on appear, applied
     /// only by the last button.
     @State private var launchAtLogin = true
+    /// which way the last step change went, so the next screen slides in
+    /// from the side it lives on.
+    @State private var movingForward = true
 
     private let windowResizer: OnboardingWindowResizer
     /// `.hello` unless something went wrong and this window was reopened to
@@ -315,21 +332,26 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 10)
-            stepBody
-            Spacer(minLength: 10)
+            ScrollView {
+                stepBody
+                    .id(flow.step)
+                    .transition(stepTransition)
+                    .padding(.horizontal, 44)
+                    .padding(.bottom, 12)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.automatic)
+
             navigation
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+                .padding(.top, 10)
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 20)
+        // under the traffic lights: the title bar is see-through.
+        .padding(.top, 34)
         .frame(width: Self.windowWidth, height: Self.windowHeight)
-        .brandGlassWindow()
-        .foregroundStyle(BrandUI.textPrimary)
-        .font(BrandUI.bodyFont)
-        .brandTinted()
-        .controlSize(.small)
-        .preferredColorScheme(.dark)
-        .animation(.easeInOut(duration: 0.2), value: flow.step)
+        .glassWindow(glow: glowTint)
+        .ignoresSafeArea()
         .onAppear {
             permissions.refresh()
             // Skipping past `hello` skips the click that gives consent and
@@ -397,73 +419,155 @@ struct OnboardingView: View {
         }
     }
 
+    // MARK: - motion and colour
+
+    /// a short slide from the side the screen lives on, and a fade; with
+    /// Reduce Motion, only the fade.
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else {
+            return .opacity
+        }
+        let shift: CGFloat = movingForward ? 28 : -28
+        return .asymmetric(
+            insertion: .offset(x: shift).combined(with: .opacity),
+            // the outgoing screen only fades: its transition was fixed
+            // when it last drew, before anyone knew which way this goes.
+            removal: .opacity
+        )
+    }
+
+    /// every step change goes through here, so the slide knows its direction
+    /// and runs on one curve.
+    private func move(_ change: (inout OnboardingFlow) -> Void) {
+        var next = flow
+        change(&next)
+        guard next.step != flow.step else {
+            return
+        }
+        movingForward = next.step.rawValue > flow.step.rawValue
+        withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.28)) {
+            flow = next
+        }
+    }
+
+    /// the glow at the window's foot takes the step's colour, and green when
+    /// setup is done.
+    private var glowTint: Color {
+        switch flow.step {
+        case .hello:
+            AppLook.accent
+        case .model:
+            .indigo
+        case .permissions:
+            onboarding.verdict == .ready ? .green : .blue
+        }
+    }
+
     // MARK: - the screens
 
+    private var stepTitle: String {
+        flow.step.title(for: onboarding.jobs, verdict: onboarding.verdict)
+            .onboardingCase
+    }
+
+    private var stepReason: String {
+        flow.step.reason(
+            for: onboarding.jobs,
+            key: settings.dictationHotkey.displayName,
+            verdict: onboarding.verdict
+        )
+        .onboardingCase
+    }
+
+    @ViewBuilder
     private var stepBody: some View {
-        VStack(spacing: 10) {
-            if flow.step == .hello {
-                Image("Badge")
-                    .resizable()
-                    .frame(width: 68, height: 68)
-                    .accessibilityHidden(true)
-                    .padding(.bottom, 2)
-            }
-
-            Text(
-                flow.step.title(
-                    for: onboarding.jobs,
-                    verdict: onboarding.verdict
-                )
-            )
-            .font(.system(size: 22, weight: .semibold))
-
-            if flow.step == .hello, onboarding.scope == .everything {
-                Text("escape the keyboard.")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(BrandUI.gold)
-            }
-
-            Text(
-                flow.step.reason(
-                    for: onboarding.jobs,
-                    key: settings.dictationHotkey.displayName,
-                    verdict: onboarding.verdict
-                )
-            )
-            .font(BrandUI.bodyFont)
-            .foregroundStyle(BrandUI.textSecondary)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: 330)
-
+        VStack(spacing: 18) {
             switch flow.step {
             case .hello:
-                jobRows.padding(.top, 14)
+                helloHero
+                jobRows
             case .model:
-                VStack(spacing: 18) {
-                    modelProgress
-                    keyTestBlock
-                }
-                .padding(.top, 10)
+                SectionHero(
+                    symbol: "cpu",
+                    tint: .indigo,
+                    title: stepTitle,
+                    blurb: stepReason
+                )
+                modelProgress
+                keyTestBlock
             case .permissions:
-                VStack(spacing: 0) {
-                    if onboarding.verdict == .ready {
-                        readyPanel
-                    } else {
-                        permissionRows
-                    }
-
-                    // below the checklist and behind a divider, because it is
-                    // a coda and not a fourth permission.
-                    if loginItem.isAvailable {
-                        rowDivider
-                        launchAtLoginRow
-                    }
+                if onboarding.verdict == .ready {
+                    SectionHero(
+                        symbol: "checkmark",
+                        tint: .green,
+                        title: stepTitle,
+                        blurb: stepReason
+                    )
+                    readyPanel
+                } else {
+                    SectionHero(
+                        symbol: "hand.raised.fill",
+                        tint: .blue,
+                        title: stepTitle,
+                        blurb: stepReason
+                    )
+                    permissionRows
                 }
-                .padding(.top, 14)
+
+                // its own module below the checklist, because it is a coda
+                // and not a fourth permission.
+                if loginItem.isAvailable {
+                    launchAtLoginRow
+                }
             }
         }
         .frame(maxWidth: .infinity)
+        // the last card turning from checklist to arrival, eased.
+        .animation(.easeOut(duration: 0.25), value: onboarding.verdict)
+    }
+
+    /// the welcome: the user's own listening orb, live, where the other
+    /// screens have an icon. reopened for one meeting errand, the errand's
+    /// icon instead — this is not an introduction.
+    private var helloHero: some View {
+        VStack(spacing: 6) {
+            Group {
+                if onboarding.scope == .meetingsOnly {
+                    IconTile(symbol: "person.2.fill", tint: .orange, size: 60)
+                } else {
+                    ThinkingOrb(
+                        state: OrbState(rawValue: settings.listeningOrb.rawValue)
+                            ?? .composing,
+                        theme: .auto,
+                        displaySize: 64
+                    )
+                    .padding(14)
+                    .glassEffect(.regular, in: Circle())
+                    .accessibilityHidden(true)
+                }
+            }
+            .padding(.bottom, 8)
+
+            Text(stepTitle)
+                .font(.largeTitle.weight(.bold))
+
+            if onboarding.scope == .everything {
+                Text("Escape the keyboard.")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(stepReason)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 380)
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+        .accessibilityElement(children: .combine)
     }
 
     /// Two jobs, both priced; dictation on, meetings offered. Ticking or
@@ -474,80 +578,52 @@ struct OnboardingView: View {
     @ViewBuilder
     private var jobRows: some View {
         if onboarding.scope == .everything {
-            VStack(spacing: 0) {
-                jobRow(
-                    "dictation",
-                    size: OnboardingJobs.dictationDownload,
-                    isOn: onboarding.dictationSelected
+            SetupModule {
+                SetupRow(
+                    symbol: "waveform",
+                    tint: .blue,
+                    title: "Dictation",
+                    detail: "\(OnboardingJobs.dictationDownload) download"
+                        .onboardingCase
                 ) {
-                    onboarding.setDictationSelected(
-                        !onboarding.dictationSelected
+                    switchControl(
+                        "Dictation",
+                        isOn: Binding(
+                            get: { onboarding.dictationSelected },
+                            set: { onboarding.setDictationSelected($0) }
+                        )
                     )
                 }
 
-                Divider().overlay(BrandUI.hairline).padding(.vertical, 10)
+                SetupDivider()
 
-                jobRow(
-                    "meeting recording",
-                    size: OnboardingJobs.meetingsDownload,
-                    isOn: onboarding.meetingsSelected
+                SetupRow(
+                    symbol: "person.2.fill",
+                    tint: .orange,
+                    title: "Meeting recording",
+                    detail: "\(OnboardingJobs.meetingsDownload) download"
+                        .onboardingCase
                 ) {
-                    onboarding.setMeetingsSelected(
-                        !onboarding.meetingsSelected
+                    switchControl(
+                        "Meeting recording",
+                        isOn: Binding(
+                            get: { onboarding.meetingsSelected },
+                            set: { onboarding.setMeetingsSelected($0) }
+                        )
                     )
                 }
             }
-            .frame(maxWidth: 330)
         }
     }
 
-    private func jobRow(
-        _ name: String,
-        size: String,
-        isOn: Bool,
-        toggle: @escaping () -> Void
+    private func switchControl(
+        _ label: String,
+        isOn: Binding<Bool>
     ) -> some View {
-        Button(action: toggle) {
-            HStack(spacing: 8) {
-                checkbox(isOn: isOn)
-
-                Text(name)
-                    .foregroundStyle(
-                        isOn ? BrandUI.textPrimary : BrandUI.textSecondary
-                    )
-                Text("·")
-                    .foregroundStyle(BrandUI.textSecondary)
-                Text(size)
-                    .font(BrandUI.valueFont)
-                    .foregroundStyle(BrandUI.textSecondary)
-
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOn ? [.isSelected] : [])
-    }
-
-    private func checkbox(isOn: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous)
-            .fill(isOn ? BrandUI.gold : Color.clear)
-            .overlay {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(
-                        isOn
-                            ? BrandUI.gold
-                            : BrandUI.textPrimary.opacity(0.28),
-                        lineWidth: 1
-                    )
-            }
-            .overlay {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(BrandUI.windowBg)
-                    .opacity(isOn ? 1 : 0)
-            }
-            .frame(width: 16, height: 16)
+        Toggle(label, isOn: isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
     }
 
     /// `LSUIElement` is true: no dock icon, no window, so after a restart the
@@ -556,131 +632,110 @@ struct OnboardingView: View {
     /// default, registered by the last button and by nothing else: closing
     /// this window still records nothing (ADR 0029).
     private var launchAtLoginRow: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Button {
-                launchAtLogin.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    checkbox(isOn: launchAtLogin)
-
-                    Text("start andrew dictate when you sign in")
-                        .foregroundStyle(
-                            launchAtLogin
-                                ? BrandUI.textPrimary
-                                : BrandUI.textSecondary
-                        )
-
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(launchAtLogin ? [.isSelected] : [])
-
-            Text("otherwise it isn't running after a restart.")
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
-                .padding(.leading, 24)
-
-            if let message = loginItem.message {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
-                    .padding(.leading, 24)
+        SetupModule {
+            SetupRow(
+                symbol: "power",
+                tint: .gray,
+                title: "Start Andrew Dictate when you sign in",
+                detail: loginItem.message?.onboardingCase
+                    ?? "Otherwise it isn't running after a restart."
+            ) {
+                switchControl("Start Andrew Dictate when you sign in", isOn: $launchAtLogin)
             }
         }
-        .frame(maxWidth: 330)
     }
 
-    /// One block per ticked job, labelled only when there are two of them —
-    /// a lone download does not need to say which job it is for.
-    @ViewBuilder
+    /// One row per ticked job, named for its job only when there are two of
+    /// them — a lone download does not need to say which job it is for.
     private var modelProgress: some View {
         let bothJobs =
             onboarding.dictationSelected && onboarding.meetingsSelected
 
-        VStack(spacing: 14) {
+        return SetupModule {
             if onboarding.dictationSelected {
-                VStack(spacing: 6) {
-                    if bothJobs {
-                        BrandSectionHeader("dictation")
-                    }
-                    dictationModelProgress
-                }
+                dictationModelRow(title: bothJobs ? "Dictation" : "Speech model")
             }
-
+            if bothJobs {
+                SetupDivider()
+            }
             if onboarding.meetingsSelected {
-                VStack(spacing: 6) {
-                    if bothJobs {
-                        BrandSectionHeader("meetings")
-                    }
-                    meetingModelProgress
-                }
+                meetingModelProgressRow(title: bothJobs ? "Meetings" : "Speech model")
             }
         }
+    }
+
+    private var dictationDownloadNote: String {
+        "about \(coordinator.settings.dictationModel.approximateSize.dropFirst()). carry on — this keeps going."
+            .onboardingCase
+    }
+
+    private var meetingDownloadNote: String {
+        "about \(coordinator.settings.meetingModel.approximateSize.dropFirst()). carry on — this keeps going."
+            .onboardingCase
     }
 
     /// The download does not gate anything. It starts when the user says go and
     /// keeps running while they carry on — blocking the flow on ~460 MB was the
     /// thing that made setup feel long.
     @ViewBuilder
-    private var dictationModelProgress: some View {
+    private func dictationModelRow(title: String) -> some View {
         switch coordinator.enginePreparationState {
         case let .downloading(progress):
             // nothing is coming down when it is already here, so no bar and
             // no size: a quoted 460 mb that never gets fetched is the same
             // lie as the caption below, one beat earlier.
             if coordinator.engineModelWasOnDisk {
-                Text("warming up…")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
+                SetupRow(symbol: "waveform", tint: .blue, title: title, detail: "Warming up…") {
+                    ProgressView().controlSize(.small)
+                }
             } else {
-                VStack(spacing: 7) {
-                    ProgressView(value: bounded(progress))
-                        .progressViewStyle(.linear)
-                        .frame(width: 240)
-                    Text("about \(coordinator.settings.dictationModel.approximateSize.dropFirst()). carry on — this keeps going.")
-                        .font(.caption)
-                        .foregroundStyle(BrandUI.textSecondary)
+                SetupRow(symbol: "waveform", tint: .blue, title: title, detail: dictationDownloadNote) {
+                    progressBar(progress)
                 }
             }
         case .warmingUp:
-            Text("warming up…")
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+            SetupRow(symbol: "waveform", tint: .blue, title: title, detail: "Warming up…") {
+                ProgressView().controlSize(.small)
+            }
         case .ready:
             // Two different things end here: a real download, and a folder
             // another install or another app had already filled. One line for
             // both told whoever watched the bar fill that nothing came down.
-            Text(
-                OnboardingState.modelReadyCaption(
+            SetupRow(
+                symbol: "waveform",
+                tint: .blue,
+                title: title,
+                detail: OnboardingState.modelReadyCaption(
                     wasOnDisk: coordinator.engineModelWasOnDisk
-                )
-            )
-            .font(.caption)
-            .foregroundStyle(BrandUI.gold)
+                ).onboardingCase
+            ) {
+                StatusDone(text: "Ready")
+            }
         case .failed:
-            VStack(spacing: 7) {
-                Text("that download didn't finish.")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.attention)
-                Button("try again") { coordinator.retryEnginePrewarm() }
-                    .font(.caption)
+            SetupRow(
+                symbol: "waveform",
+                tint: .blue,
+                title: title,
+                detail: "That download didn't finish.",
+                detailIsAlert: true
+            ) {
+                Button("Try Again") { coordinator.retryEnginePrewarm() }
+                    .buttonStyle(.glassProminent)
             }
         case .notStarted:
-            Text("starting…")
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+            SetupRow(symbol: "waveform", tint: .blue, title: title, detail: "Starting…") {
+                ProgressView().controlSize(.small)
+            }
         }
     }
 
     private var meetingModelReadyCaption: String {
         switch coordinator.settings.meetingModel {
-        case .whisperLargeV3: "got it. it hears every language and writes english."
-        case .whisperLargeV3Turbo: "got it. it hears every language and writes it as spoken."
-        case .parakeetV3: "got it. it hears english and european languages, as spoken."
-        case .parakeetV2: "got it. it hears english, as spoken."
-        case .whistle: "got it. it hears english and six european languages, as spoken."
+        case .whisperLargeV3: "Got it. It hears every language and writes English."
+        case .whisperLargeV3Turbo: "Got it. It hears every language and writes it as spoken."
+        case .parakeetV3: "Got it. It hears English and European languages, as spoken."
+        case .parakeetV2: "Got it. It hears English, as spoken."
+        case .whistle: "Got it. It hears English and six European languages, as spoken."
         }
     }
 
@@ -688,20 +743,15 @@ struct OnboardingView: View {
     /// click, it says what it costs, and a failure offers the retry rather
     /// than leaving a dead row.
     @ViewBuilder
-    private var meetingModelProgress: some View {
+    private func meetingModelProgressRow(title: String) -> some View {
         switch meetingSetup.modelStatus {
         case .pending:
-            Text("starts when you click.")
-                .font(.caption)
-                .foregroundStyle(BrandUI.textSecondary)
+            SetupRow(symbol: "person.2.fill", tint: .orange, title: title, detail: "Starts when you click.") {
+                EmptyView()
+            }
         case .inProgress:
-            VStack(spacing: 7) {
-                ProgressView(value: bounded(meetingSetup.modelProgress))
-                    .progressViewStyle(.linear)
-                    .frame(width: 240)
-                Text("about \(coordinator.settings.meetingModel.approximateSize.dropFirst()). carry on — this keeps going.")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.textSecondary)
+            SetupRow(symbol: "person.2.fill", tint: .orange, title: title, detail: meetingDownloadNote) {
+                progressBar(meetingSetup.modelProgress)
             }
         case .ready:
             // one decode for the whole room, so the language is the model's
@@ -709,18 +759,27 @@ struct OnboardingView: View {
             // would be a promise it does not keep. nor does parakeet hear
             // every language — setup only gets here with it if it was
             // picked in settings first.
-            Text(meetingModelReadyCaption)
-                .font(.caption)
-                .foregroundStyle(BrandUI.gold)
+            SetupRow(symbol: "person.2.fill", tint: .orange, title: title, detail: meetingModelReadyCaption) {
+                StatusDone(text: "Ready")
+            }
         case .actionRequired:
-            VStack(spacing: 7) {
-                Text("that download didn't finish.")
-                    .font(.caption)
-                    .foregroundStyle(BrandUI.attention)
-                Button("try again") { meetingSetup.retryModel() }
-                    .font(.caption)
+            SetupRow(
+                symbol: "person.2.fill",
+                tint: .orange,
+                title: title,
+                detail: "That download didn't finish.",
+                detailIsAlert: true
+            ) {
+                Button("Try Again") { meetingSetup.retryModel() }
+                    .buttonStyle(.glassProminent)
             }
         }
+    }
+
+    private func progressBar(_ progress: Double) -> some View {
+        ProgressView(value: bounded(progress))
+            .progressViewStyle(.linear)
+            .frame(width: 110)
     }
 
     /// Proof, not configuration. The key is the one part of dictation setup
@@ -734,35 +793,24 @@ struct OnboardingView: View {
     @ViewBuilder
     private var keyTestBlock: some View {
         if onboarding.consented, onboarding.dictationSelected {
-            VStack(spacing: 6) {
-                BrandSectionHeader("your key")
-
-                HStack(alignment: .top, spacing: 9) {
+            SetupModule {
+                SetupRow(
+                    symbol: "keyboard",
+                    tint: keyTest.fired ? .green : .gray,
+                    title: "Your key",
+                    detail: keyTest.caption(for: settings.dictationHotkey),
+                    detailIsSuccess: keyTest.fired
+                ) {
                     if keyTest.pickerShown {
                         keyPicker
                     } else {
-                        KeyChip(
-                            settings.dictationHotkey.displayName,
-                            isActive: keyTest.fired
-                        )
+                        keyCap
                     }
-
-                    Text(
-                        keyTest.caption(for: settings.dictationHotkey)
-                    )
-                    .font(.caption)
-                    .foregroundStyle(
-                        keyTest.fired ? BrandUI.gold : BrandUI.textSecondary
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer(minLength: 0)
                 }
                 // the tallest state's height from the first render: the
                 // picker must not push the card around under the pointer.
-                .frame(height: 38, alignment: .top)
+                .frame(minHeight: 52)
             }
-            .frame(maxWidth: 330)
             .task(id: keyTest.armedAt) {
                 do {
                     try await Task.sleep(for: .seconds(Self.keyTestPatience))
@@ -777,6 +825,16 @@ struct OnboardingView: View {
         }
     }
 
+    /// the key lights in the accent the moment it is heard.
+    private var keyCap: some View {
+        SettingsKeyCap(
+            settings.dictationHotkey.displayName,
+            isActive: keyTest.fired
+        )
+        .scaleEffect(keyTest.fired && !reduceMotion ? 1.08 : 1)
+        .animation(.easeOut(duration: 0.16), value: keyTest.fired)
+    }
+
     /// The same menu settings owns (one key picker in the app, rendered
     /// twice), so a pick here is the real rebind and not a setup-only draft.
     private var keyPicker: some View {
@@ -788,19 +846,16 @@ struct OnboardingView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                KeyChip(
-                    settings.dictationHotkey.displayName,
-                    isActive: keyTest.fired
-                )
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(BrandUI.textSecondary)
+                keyCap
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .fixedSize()
-        .accessibilityLabel("dictation key")
+        .accessibilityLabel("Dictation key")
     }
 
     private func rebindForKeyTest(to binding: HotkeyBinding) {
@@ -821,47 +876,50 @@ struct OnboardingView: View {
     ///
     /// Shorter than the checklist it replaces — the window's height is fixed
     /// on purpose, because it used to grow under the pointer.
-    @ViewBuilder
     private var readyPanel: some View {
-        VStack(spacing: 14) {
-            if onboarding.dictationSelected {
-                HStack(spacing: 7) {
-                    Text("hold")
-                    KeyChip(settings.dictationHotkey.displayName)
-                    Text("· talk · let go")
+        SetupModule {
+            VStack(spacing: 14) {
+                if onboarding.dictationSelected {
+                    HStack(spacing: 7) {
+                        Text("Hold")
+                        SettingsKeyCap(settings.dictationHotkey.displayName)
+                        Text("· talk · let go")
+                    }
+                    .font(.title3.weight(.medium))
+                } else {
+                    // meetings-only reaches this card too, and must never be
+                    // told to hold a key it has no use for.
+                    Text("Pick “Record a Meeting” from that badge.")
+                        .font(.title3.weight(.medium))
                 }
-                .font(BrandUI.bodyFont)
-                .foregroundStyle(BrandUI.gold)
-            } else {
-                // meetings-only reaches this card too, and must never be told
-                // to hold a key it has no use for.
-                Text("pick “record a meeting” from that badge.")
-                    .font(BrandUI.bodyFont)
-                    .foregroundStyle(BrandUI.gold)
-            }
 
-            HStack(spacing: 8) {
-                Image("Badge")
-                    .resizable()
-                    .frame(width: 18, height: 18)
-                    .accessibilityHidden(true)
-                Text("this badge is andrew, up in your menu bar.")
-                    .foregroundStyle(BrandUI.textSecondary)
+                HStack(spacing: 8) {
+                    // gold stays here: it is the brand's own mark.
+                    Image("Badge")
+                        .resizable()
+                        .frame(width: 18, height: 18)
+                        .accessibilityHidden(true)
+                    Text("This badge is Andrew, up in your menu bar.")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.callout)
             }
-            .font(.caption)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
         }
-        .frame(maxWidth: 330)
     }
 
     /// One checklist, filtered by job: nothing here belongs to a job the user
     /// unticked, because a row you cannot need is a row you have to wonder
     /// about.
     private var permissionRows: some View {
-        VStack(spacing: 0) {
+        SetupModule {
             permissionRow(
-                "microphone",
+                "Microphone",
+                symbol: "mic.fill",
+                tint: .orange,
                 status: onboarding.microphoneStatus,
-                note: "switch the microphone on for andrew dictate.",
+                note: "Switch the microphone on for Andrew Dictate.",
                 allow: {
                     permissions.requestMicrophoneAccess {
                         await coordinator.requestMicrophoneAccess()
@@ -871,36 +929,33 @@ struct OnboardingView: View {
             )
 
             if onboarding.dictationSelected {
-                rowDivider
+                SetupDivider()
 
                 permissionRow(
-                    "accessibility",
+                    "Accessibility",
+                    symbol: "accessibility",
+                    tint: .blue,
                     status: onboarding.accessibilityStatus,
-                    note: "find andrew dictate in the list and switch it on.",
+                    note: "Find Andrew Dictate in the list and switch it on.",
                     allow: permissions.requestAccessibilityPrompt,
                     openSettings: permissions.openAccessibilitySettings
                 )
             }
 
             if onboarding.meetingsSelected {
-                rowDivider
+                SetupDivider()
                 systemAudioRow
-                rowDivider
+                SetupDivider()
                 meetingModelRow
 
                 // nothing new in the happy path: a folder that exists is not
                 // news, and only a refusal needs saying.
                 if meetingSetup.folderStatus == .actionRequired {
-                    rowDivider
+                    SetupDivider()
                     transcriptsFolderRow
                 }
             }
         }
-        .frame(maxWidth: 330)
-    }
-
-    private var rowDivider: some View {
-        Divider().overlay(BrandUI.hairline).padding(.vertical, 10)
     }
 
     /// Not a question — a demonstration. The app plays its own start sound
@@ -908,102 +963,82 @@ struct OnboardingView: View {
     /// macOS ask (ADR 0021, ADR 0040). So this row narrates instead of
     /// offering an "allow" button: there is nothing here for you to click
     /// unless it fails.
+    @ViewBuilder
     private var systemAudioRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("system audio")
-                .foregroundStyle(BrandUI.textPrimary)
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                switch meetingSetup.systemAudioStatus {
-                case .pending:
-                    rowNote("proved when you click, by playing a sound")
-                case .inProgress:
-                    rowNote("playing a sound to prove it can hear…")
-                case .ready:
-                    rowVerdict("heard it")
-                case .actionRequired:
-                    rowNote(
-                        "couldn't hear — allow system audio recording in "
-                            + "privacy settings",
-                        colour: BrandUI.attention
-                    )
-                    Button("open privacy settings") {
-                        meetingSetup.openSystemAudioSettings()
-                    }
-                    .font(.caption)
-                }
+        let title = "System audio"
+        let symbol = "speaker.wave.2.fill"
+        let tint = Color.pink
+        switch meetingSetup.systemAudioStatus {
+        case .pending:
+            SetupRow(symbol: symbol, tint: tint, title: title, detail: "Proved when you click, by playing a sound.") {
+                EmptyView()
             }
-            .frame(maxWidth: 200, alignment: .trailing)
+        case .inProgress:
+            SetupRow(symbol: symbol, tint: tint, title: title, detail: "Playing a sound to prove it can hear…") {
+                ProgressView().controlSize(.small)
+            }
+        case .ready:
+            SetupRow(symbol: symbol, tint: tint, title: title, detail: nil) {
+                StatusDone(text: "Heard it")
+            }
+        case .actionRequired:
+            SetupRow(
+                symbol: symbol,
+                tint: tint,
+                title: title,
+                detail: "Couldn't hear. Allow system audio recording in privacy settings.",
+                detailIsAlert: true
+            ) {
+                Button("Open Privacy Settings") {
+                    meetingSetup.openSystemAudioSettings()
+                }
+                .buttonStyle(.glassProminent)
+            }
         }
     }
 
+    @ViewBuilder
     private var meetingModelRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("meeting model")
-                .foregroundStyle(BrandUI.textPrimary)
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                switch meetingSetup.modelStatus {
-                case .pending:
-                    rowNote("downloads when you click")
-                case .inProgress:
-                    ProgressView(value: bounded(meetingSetup.modelProgress))
-                        .progressViewStyle(.linear)
-                        .frame(width: 110)
-                    rowNote(OnboardingJobs.meetingsDownload)
-                case .ready:
-                    rowVerdict("downloaded")
-                case .actionRequired:
-                    rowNote(
-                        "that download didn't finish.",
-                        colour: BrandUI.attention
-                    )
-                    Button("try again") { meetingSetup.retryModel() }
-                        .font(.caption)
-                }
+        let title = "Meeting model"
+        let symbol = "person.2.fill"
+        let tint = Color.orange
+        switch meetingSetup.modelStatus {
+        case .pending:
+            SetupRow(symbol: symbol, tint: tint, title: title, detail: "Downloads when you click.") {
+                EmptyView()
             }
-            .frame(maxWidth: 200, alignment: .trailing)
+        case .inProgress:
+            SetupRow(symbol: symbol, tint: tint, title: title, detail: OnboardingJobs.meetingsDownload.onboardingCase) {
+                progressBar(meetingSetup.modelProgress)
+            }
+        case .ready:
+            SetupRow(symbol: symbol, tint: tint, title: title, detail: nil) {
+                StatusDone(text: "Downloaded")
+            }
+        case .actionRequired:
+            SetupRow(
+                symbol: symbol,
+                tint: tint,
+                title: title,
+                detail: "That download didn't finish.",
+                detailIsAlert: true
+            ) {
+                Button("Try Again") { meetingSetup.retryModel() }
+                    .buttonStyle(.glassProminent)
+            }
         }
     }
 
     private var transcriptsFolderRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("transcripts folder")
-                .foregroundStyle(BrandUI.textPrimary)
-
-            Spacer(minLength: 8)
-
-            rowNote(
-                "couldn't make the meetings folder — choose another in settings",
-                colour: BrandUI.attention
-            )
-            .frame(maxWidth: 200, alignment: .trailing)
+        SetupRow(
+            symbol: "folder.fill",
+            tint: .cyan,
+            title: "Transcripts folder",
+            detail: "Couldn't make the meetings folder. Choose another in Settings.",
+            detailIsAlert: true
+        ) {
+            EmptyView()
         }
-    }
-
-    private func rowNote(
-        _ text: String,
-        colour: Color = BrandUI.textSecondary
-    ) -> some View {
-        Text(text)
-            .font(.caption)
-            .foregroundStyle(colour)
-            .multilineTextAlignment(.trailing)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func rowVerdict(_ text: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .bold))
-            Text(text)
-        }
-        .font(.caption.weight(.medium))
-        .foregroundStyle(BrandUI.gold)
     }
 
     /// Says what is true right now, in a word. The previous version showed
@@ -1013,44 +1048,39 @@ struct OnboardingView: View {
     /// opens on a list, and which row to touch is the one thing the user is
     /// left guessing. Only shown alongside "open settings" — a granted
     /// permission has nothing to instruct.
+    @ViewBuilder
     private func permissionRow(
         _ name: String,
+        symbol: String,
+        tint: Color,
         status: OnboardingRowStatus,
         note: String? = nil,
         allow: @escaping () -> Void,
         openSettings: @escaping () -> Void
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(name)
-                .foregroundStyle(BrandUI.textPrimary)
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                switch status {
-                case .ready:
-                    rowVerdict("granted")
-                case .actionRequired:
-                    Button("open settings", action: openSettings)
-                        .font(.caption)
-                    if let note {
-                        // default colour: a permission you have not given
-                        // yet is not a failure, and attention is for things
-                        // that went wrong.
-                        rowNote(note)
-                    }
-                case .inProgress:
-                    rowNote("asking…")
-                case .pending:
-                    Button("allow", action: allow)
-                        .font(.caption)
-                }
+        switch status {
+        case .ready:
+            SetupRow(symbol: symbol, tint: tint, title: name, detail: nil) {
+                StatusDone(text: "Granted")
             }
-            .frame(maxWidth: 200, alignment: .trailing)
+        case .actionRequired:
+            // default colour: a permission you have not given yet is not a
+            // failure, and red is for things that went wrong.
+            SetupRow(symbol: symbol, tint: tint, title: name, detail: note) {
+                Button("Open Settings", action: openSettings)
+                    .buttonStyle(.glassProminent)
+            }
+        case .inProgress:
+            SetupRow(symbol: symbol, tint: tint, title: name, detail: "Asking…") {
+                ProgressView().controlSize(.small)
+            }
+        case .pending:
+            SetupRow(symbol: symbol, tint: tint, title: name, detail: nil) {
+                Button("Allow", action: allow)
+                    .buttonStyle(.glassProminent)
+            }
         }
     }
-
-    // MARK: - exactly one thing to do
 
     // MARK: - one row, at the bottom, with one way forward
 
@@ -1068,7 +1098,7 @@ struct OnboardingView: View {
             // Centred independently of the buttons, which are different widths
             // and would otherwise push the dots off-centre.
             if showsPager {
-                HStack(spacing: 7) {
+                HStack(spacing: 2) {
                     ForEach(OnboardingStep.allCases) { step in
                         // before the click there is nothing to come back to:
                         // the last screen's "done" works, its two prompts are
@@ -1078,60 +1108,64 @@ struct OnboardingView: View {
                             to: step,
                             consented: onboarding.consented
                         )
+                        let current = step == flow.step
 
                         Button {
-                            flow.jump(to: step)
+                            move { $0.jump(to: step) }
                         } label: {
-                            Circle()
+                            Capsule()
                                 .fill(
-                                    step == flow.step
-                                        ? BrandUI.gold
-                                        : BrandUI.textPrimary
-                                            .opacity(reachable ? 0.22 : 0.1)
+                                    current
+                                        ? AnyShapeStyle(AppLook.accent)
+                                        : AnyShapeStyle(
+                                            .primary.opacity(reachable ? 0.25 : 0.1)
+                                        )
                                 )
-                                .frame(width: 6, height: 6)
-                                .contentShape(Rectangle())
+                                .frame(width: current ? 18 : 7, height: 7)
                                 .padding(5)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .disabled(!reachable)
-                        .accessibilityLabel(step.title(for: onboarding.jobs))
+                        .accessibilityLabel(
+                            step.title(for: onboarding.jobs).onboardingCase
+                        )
+                        .accessibilityAddTraits(current ? .isSelected : [])
                     }
                 }
+                .animation(.easeOut(duration: 0.22), value: flow.step)
             }
 
             HStack {
                 Button {
-                    flow.goBack()
+                    move { $0.goBack() }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("back")
-                    }
+                    Text("Back")
+                        .padding(.horizontal, 4)
                 }
-                .buttonStyle(.plain)
-                .font(.callout)
-                .foregroundStyle(BrandUI.textSecondary)
+                .buttonStyle(.glass)
+                .controlSize(.large)
                 .opacity(canGoBack ? 1 : 0)
                 .disabled(!canGoBack)
 
                 Spacer()
 
                 Button(action: performPrimaryAction) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Text(
                             flow.step.actionTitle(
                                 for: onboarding.jobs,
                                 verdict: onboarding.verdict
                             )
+                            .onboardingCase
                         )
                         Image(systemName: primaryGlyph)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                     }
+                    .padding(.horizontal, 4)
                 }
-                // the one prominent control on the surface gets the glass
-                // (ADR 0036); everything else stays quiet.
+                // the one prominent control on the surface (ADR 0036);
+                // everything else stays quiet.
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
                 // No job, no setup: there is nothing this click could start.
@@ -1187,10 +1221,10 @@ struct OnboardingView: View {
             if onboarding.meetingsSelected {
                 meetingSetup.begin()
             }
-            flow.advance()
+            move { $0.advance() }
 
         case .model:
-            flow.advance()
+            move { $0.advance() }
 
         case .permissions:
             // the tick lands here and nowhere else. A refusal must not hold
@@ -1272,5 +1306,96 @@ struct OnboardingView: View {
 
     private func bounded(_ progress: Double) -> Double {
         min(max(progress, 0), 1)
+    }
+}
+
+// MARK: - the pieces every screen is made of
+
+/// a group of rows on one glass module, as settings groups them.
+private struct SetupModule<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            content
+        }
+        .glassModule(cornerRadius: 14)
+    }
+}
+
+/// a hairline between rows, inset past the icon as System Settings does.
+private struct SetupDivider: View {
+    var body: some View {
+        Divider().padding(.leading, 52)
+    }
+}
+
+/// one line of setup: an icon, what it is, a line on where it stands, and
+/// the one thing to do about it on the right.
+private struct SetupRow<Trailing: View>: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    let detail: String?
+    var detailIsAlert = false
+    var detailIsSuccess = false
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 12) {
+            IconTile(symbol: symbol, tint: tint, size: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let detail {
+                    Text(detail)
+                        .font(.subheadline)
+                        .foregroundStyle(detailStyle)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            trailing
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minHeight: 48)
+        .animation(.easeOut(duration: 0.2), value: detail)
+    }
+
+    private var detailStyle: AnyShapeStyle {
+        if detailIsAlert {
+            return AnyShapeStyle(.red)
+        }
+        if detailIsSuccess {
+            return AnyShapeStyle(.green)
+        }
+        return AnyShapeStyle(.secondary)
+    }
+}
+
+/// a row's done state: a green tick and one word.
+private struct StatusDone: View {
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: "checkmark.circle.fill")
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.green)
+            .transition(.scale(scale: 0.8).combined(with: .opacity))
+    }
+}
+
+private extension String {
+    /// the flow's lowercase copy in sentence case, with the app's own name
+    /// spelled as macOS would.
+    var onboardingCase: String {
+        capitalizedFirst.replacingOccurrences(
+            of: "andrew dictate",
+            with: "Andrew Dictate",
+            options: .caseInsensitive
+        )
     }
 }
